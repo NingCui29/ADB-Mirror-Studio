@@ -2,7 +2,10 @@ namespace AdbMirrorStudio.Infrastructure.Processes;
 
 internal static class BoundedTextTailReader
 {
-    public static async Task<string> ReadAsync(TextReader reader, int maxCharacters = 65_536)
+    public static async Task<string> ReadAsync(
+        TextReader reader,
+        int maxCharacters = 65_536,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(reader);
         if (maxCharacters < 1) throw new ArgumentOutOfRangeException(nameof(maxCharacters));
@@ -14,7 +17,17 @@ internal static class BoundedTextTailReader
 
         while (true)
         {
-            var read = await reader.ReadAsync(readBuffer).ConfigureAwait(false);
+            int read;
+            try
+            {
+                read = await reader.ReadAsync(readBuffer.AsMemory(), cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // A descendant may retain a pipe after its parent exits. Preserve
+                // the diagnostics already received when the caller stops draining.
+                break;
+            }
             if (read == 0) break;
 
             var sourceOffset = 0;

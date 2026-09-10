@@ -7,6 +7,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'release-common.ps1')
 $commercialRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $releaseScript = Join-Path $PSScriptRoot 'build-release.ps1'
 $installerScript = Join-Path $commercialRoot 'installer\AdbMirrorStudio.nsi'
@@ -15,28 +16,20 @@ $releaseRoot = Join-Path $commercialRoot 'artifacts\release'
 $stagingDirectory = Join-Path $installerRoot ".staging-$([Guid]::NewGuid().ToString('N'))"
 $payloadDirectory = Join-Path $stagingDirectory 'payload'
 $licensePath = Join-Path $stagingDirectory 'FREE-USE-LICENSE.txt'
+$uninstallInclude = Join-Path $stagingDirectory 'uninstall-files.nsh'
 
-[xml]$buildProperties = Get-Content (Join-Path $commercialRoot 'Directory.Build.props')
-$versionNode = $buildProperties.SelectSingleNode('/Project/PropertyGroup/Version')
-$fileVersionNode = $buildProperties.SelectSingleNode('/Project/PropertyGroup/FileVersion')
-if ($versionNode -eq $null -or [string]::IsNullOrWhiteSpace($versionNode.InnerText)) {
-    throw 'Directory.Build.props 中缺少 Version。'
-}
-$version = $versionNode.InnerText.Trim()
-$fileVersion = if ($fileVersionNode -ne $null) { $fileVersionNode.InnerText.Trim() } else { "$version.0" }
+$releaseVersion = Get-ReleaseVersion -CommercialRoot $commercialRoot
+$version = $releaseVersion.Version
+$fileVersion = $releaseVersion.FileVersion
 $productVersion = "V$version"
 $portableArchive = Join-Path $releaseRoot "AdbMirrorStudio-$productVersion-win-x64.zip"
 $installerName = "ADB-Mirror-Studio-Setup-$productVersion-win-x64.exe"
 $installerPath = Join-Path $installerRoot $installerName
 
-if (-not $installerRoot.StartsWith($commercialRoot, [System.StringComparison]::OrdinalIgnoreCase) -or
-    -not $stagingDirectory.StartsWith($installerRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
-    throw '拒绝清理项目目录以外的安装器路径。'
-}
+Assert-ReleaseChildPath -Root $commercialRoot -Path $stagingDirectory
 
 if (-not $SkipPortableBuild) {
     & $releaseScript -Configuration $Configuration
-    if ($LASTEXITCODE -ne 0) { throw '便携发行包构建失败，停止安装器构建。' }
 }
 if (-not (Test-Path -LiteralPath $portableArchive)) {
     throw "未找到便携发行包：$portableArchive"
@@ -61,11 +54,8 @@ if ([string]::IsNullOrWhiteSpace($NsisCompilerPath) -or -not (Test-Path -Literal
 New-Item -ItemType Directory -Path $payloadDirectory -Force | Out-Null
 try {
     Expand-Archive -LiteralPath $portableArchive -DestinationPath $payloadDirectory -Force
-    foreach ($requiredFile in @('AdbMirrorStudio.App.exe', 'Tools\adb.exe', 'Tools\scrcpy.exe', 'README.md', 'FREE-USE-LICENSE.md')) {
-        if (-not (Test-Path -LiteralPath (Join-Path $payloadDirectory $requiredFile))) {
-            throw "安装器负载缺少必要文件：$requiredFile"
-        }
-    }
+    Assert-ReleasePayload -PayloadDirectory $payloadDirectory -ExpectedFileVersion $fileVersion
+    Write-UninstallPayloadInclude -PayloadDirectory $payloadDirectory -OutputPath $uninstallInclude
 
     $privacyText = Get-Content (Join-Path $commercialRoot 'PRIVACY.md') -Raw
     $licenseText = Get-Content (Join-Path $commercialRoot 'FREE-USE-LICENSE.md') -Raw
@@ -75,9 +65,7 @@ try {
     $estimatedSizeKb = [Math]::Ceiling($payloadBytes / 1KB)
 
     New-Item -ItemType Directory -Path $installerRoot -Force | Out-Null
-    if (Test-Path -LiteralPath $installerPath) {
-        Remove-Item -LiteralPath $installerPath -Force
-    }
+    $stagedInstaller = Join-Path $stagingDirectory $installerName
 
     $compilerArguments = @(
         '/INPUTCHARSET',
@@ -88,7 +76,8 @@ try {
         "/DAPP_FILE_VERSION=$fileVersion",
         "/DSOURCE_DIR=$payloadDirectory",
         "/DLICENSE_FILE=$licensePath",
-        "/DOUTPUT_DIR=$installerRoot",
+        "/DOUTPUT_DIR=$stagingDirectory",
+        "/DUNINSTALL_INCLUDE=$uninstallInclude",
         "/DESTIMATED_SIZE_KB=$estimatedSizeKb"
     )
     if (-not [string]::IsNullOrWhiteSpace($SignCommand)) {
@@ -101,10 +90,14 @@ try {
 
     & $NsisCompilerPath @compilerArguments
     if ($LASTEXITCODE -ne 0) { throw 'NSIS 编译失败。' }
-    if (-not (Test-Path -LiteralPath $installerPath)) { throw "安装器未生成：$installerPath" }
+    if (-not (Test-Path -LiteralPath $stagedInstaller)) { throw '安装器未生成。' }
 
+    $signature = Get-AuthenticodeSignature -LiteralPath $stagedInstaller
+    if (-not [string]::IsNullOrWhiteSpace($SignCommand) -and $signature.Status -ne 'Valid') {
+        throw '指定了签名命令，但安装器未通过 Authenticode 签名验证。'
+    }
+    [IO.File]::Move($stagedInstaller, $installerPath, $true)
     $hash = Get-FileHash -LiteralPath $installerPath -Algorithm SHA256
-    $signature = Get-AuthenticodeSignature -LiteralPath $installerPath
     [pscustomobject]@{
         Version = $productVersion
         Installer = $installerPath
@@ -114,7 +107,5 @@ try {
     }
 }
 finally {
-    if (Test-Path -LiteralPath $stagingDirectory) {
-        Remove-Item -LiteralPath $stagingDirectory -Recurse -Force
-    }
+    Remove-ReleaseStagingDirectory -Root $commercialRoot -StagingDirectory $stagingDirectory
 }

@@ -28,7 +28,7 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Audit tracked files for sensitive data
+      - name: Audit tracked and new files for sensitive data
         shell: pwsh
         run: ./commercial/scripts/test-privacy.ps1
 
@@ -57,3 +57,9 @@ jobs:
           --runtime win-x64
           --no-restore
           /p:Unpackaged=true
+
+      - name: Validate release payload and uninstall manifest
+        shell: pwsh
+        run: >-
+          ./commercial/scripts/test-release-scripts.ps1
+          -AppBuildDirectory commercial/src/AdbMirrorStudio.App/bin/Release/net10.0-windows10.0.26100.0/win-x64

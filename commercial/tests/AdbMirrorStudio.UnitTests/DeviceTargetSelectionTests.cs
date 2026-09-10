@@ -18,7 +18,7 @@ public sealed class DeviceTargetSelectionTests
     }
 
     [Fact]
-    public void FallsBackToFirstOnlineDeviceWhenCurrentDeviceDisconnects()
+    public void ClearsSelectionWhenCurrentDeviceDisconnects()
     {
         var devices = new[]
         {
@@ -27,7 +27,23 @@ public sealed class DeviceTargetSelectionTests
             Device("second-online", DeviceState.Online)
         };
 
-        Assert.Equal("first-online", DeviceTargetSelection.Resolve("missing", devices));
+        Assert.Null(DeviceTargetSelection.Resolve("missing", devices));
+    }
+
+    [Fact]
+    public void SelectsOnlyUnambiguousInitialOnlineDevice()
+    {
+        Assert.Equal("online", DeviceTargetSelection.Resolve(null,
+            [Device("offline", DeviceState.Offline), Device("online", DeviceState.Online)]));
+        Assert.Null(DeviceTargetSelection.Resolve(null,
+            [Device("first", DeviceState.Online), Device("second", DeviceState.Online)]));
+    }
+
+    [Fact]
+    public void DoesNotSelectReplacementDeviceWhenAutomaticSelectionIsSuppressed()
+    {
+        Assert.Null(DeviceTargetSelection.Resolve(null, [Device("other", DeviceState.Online)], allowAutoSelection: false));
+        Assert.Equal("chosen", DeviceTargetSelection.Resolve("chosen", [Device("chosen", DeviceState.Online)], allowAutoSelection: false));
     }
 
     [Fact]

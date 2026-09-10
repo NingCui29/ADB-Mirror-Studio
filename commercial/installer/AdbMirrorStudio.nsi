@@ -8,11 +8,15 @@ CRCCheck on
 !include "x64.nsh"
 
 !ifndef APP_VERSION
-  !define APP_VERSION "1.3.2"
+  !error "APP_VERSION must come from Directory.Build.props via build-installer.ps1."
 !endif
 !ifndef APP_FILE_VERSION
-  !define APP_FILE_VERSION "1.3.2.0"
+  !error "APP_FILE_VERSION must come from Directory.Build.props via build-installer.ps1."
 !endif
+!ifndef UNINSTALL_INCLUDE
+  !error "UNINSTALL_INCLUDE must point to the generated payload removal manifest."
+!endif
+!include "${UNINSTALL_INCLUDE}"
 !ifndef SOURCE_DIR
   !error "SOURCE_DIR must point to the unpacked self-contained release directory."
 !endif
@@ -30,7 +34,7 @@ CRCCheck on
 !define APP_EXE "AdbMirrorStudio.App.exe"
 !define APP_REGISTRY_KEY "Software\ADB Mirror Studio"
 !define UNINSTALL_REGISTRY_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\{8AD894DA-F472-495E-9266-D074F1EA586E}_ADBMirrorStudio"
-!define REPOSITORY_URL "https://github.com/Cuinings/ADB-Mirror-Studio"
+!define REPOSITORY_URL "https://github.com/NingCui29/ADB-Mirror-Studio"
 
 Name "${APP_NAME} V${APP_VERSION}"
 Caption "${APP_NAME} V${APP_VERSION} 安装程序"
@@ -91,8 +95,8 @@ LangString DesktopSectionDescription ${LANG_SIMPCHINESE} "在当前用户桌面�
 LangString DesktopSectionDescription ${LANG_ENGLISH} "Creates a shortcut on the current user's desktop."
 LangString UnsupportedArchitecture ${LANG_SIMPCHINESE} "ADB Mirror Studio 仅支持 Windows x64。"
 LangString UnsupportedArchitecture ${LANG_ENGLISH} "ADB Mirror Studio requires 64-bit Windows."
-LangString ClosingApplication ${LANG_SIMPCHINESE} "正在关闭运行中的 ADB Mirror Studio…"
-LangString ClosingApplication ${LANG_ENGLISH} "Closing the running ADB Mirror Studio instance..."
+LangString CloseApplicationPrompt ${LANG_SIMPCHINESE} "安装目录中的 ADB Mirror Studio 正在运行或文件被占用。请先停止录屏并正常退出软件，然后重试。"
+LangString CloseApplicationPrompt ${LANG_ENGLISH} "ADB Mirror Studio in the installation directory is running or its files are in use. Stop recording and exit the application, then retry."
 LangString RemoveUserDataPrompt ${LANG_SIMPCHINESE} "是否同时删除本机设置和崩溃日志？$\r$\n$LOCALAPPDATA\AdbMirrorStudio$\r$\n$\r$\n选择“否”可在以后重新安装时保留设置。"
 LangString RemoveUserDataPrompt ${LANG_ENGLISH} "Also delete local settings and crash logs?$\r$\n$LOCALAPPDATA\AdbMirrorStudio$\r$\n$\r$\nChoose No to preserve settings for a future installation."
 
@@ -105,12 +109,34 @@ Function .onInit
   SetRegView 64
 FunctionEnd
 
+!macro EnsureApplicationClosed Prefix
+${Prefix}WaitStart:
+  StrCpy $1 30
+${Prefix}Retry:
+  IfFileExists "$INSTDIR\${APP_EXE}" 0 ${Prefix}Ready
+  ; OPEN_EXISTING with write access detects a running image without modifying the file.
+  System::Call 'kernel32::CreateFileW(w "$INSTDIR\${APP_EXE}", i 0x40000000, i 0, p 0, i 3, i 0, p 0) p.r0'
+  StrCmp $0 -1 ${Prefix}Busy
+  System::Call 'kernel32::CloseHandle(p r0)'
+  Goto ${Prefix}Ready
+${Prefix}Busy:
+  ; In-app updates launch the installer before asynchronous application shutdown completes.
+  IntCmp $1 0 ${Prefix}Prompt
+  Sleep 1000
+  IntOp $1 $1 - 1
+  Goto ${Prefix}Retry
+${Prefix}Prompt:
+  IfSilent ${Prefix}Abort
+  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(CloseApplicationPrompt)" IDRETRY ${Prefix}WaitStart
+${Prefix}Abort:
+  SetErrorLevel 2
+  Abort
+${Prefix}Ready:
+!macroend
+
 Section "$(MainSectionName)" MainSection
   SectionIn RO
-  DetailPrint "$(ClosingApplication)"
-  nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /IM "${APP_EXE}" /T /F'
-  Pop $0
-  Sleep 500
+  !insertmacro EnsureApplicationClosed Install
 
   SetOutPath "$INSTDIR"
   File /r "${SOURCE_DIR}\*"
@@ -158,9 +184,7 @@ Function un.onInit
 FunctionEnd
 
 Section "Uninstall"
-  nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /IM "${APP_EXE}" /T /F'
-  Pop $0
-  Sleep 500
+  !insertmacro EnsureApplicationClosed Uninstall
 
   Delete "$DESKTOP\ADB Mirror Studio.lnk"
   Delete "$QUICKLAUNCH\User Pinned\TaskBar\ADB Mirror Studio.lnk"
@@ -174,7 +198,7 @@ Section "Uninstall"
   nsExec::Exec '"$SYSDIR\ie4uinit.exe" -show'
   Pop $0
 
-  RMDir /r "$INSTDIR"
+  !insertmacro RemoveInstalledPayload
 
   IfSilent PreserveUserData
   MessageBox MB_YESNO|MB_ICONQUESTION "$(RemoveUserDataPrompt)" IDNO PreserveUserData

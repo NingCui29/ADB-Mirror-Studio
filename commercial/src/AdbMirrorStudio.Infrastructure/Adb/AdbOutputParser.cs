@@ -79,7 +79,9 @@ public static partial class AdbOutputParser
     };
 
     private static ConnectionKind DetectConnectionKind(string serial) =>
-        serial.Contains(':', StringComparison.Ordinal) ? ConnectionKind.TcpIp : ConnectionKind.Usb;
+        serial.Contains(':', StringComparison.Ordinal)
+        || serial.Contains("_adb-tls-connect._tcp", StringComparison.OrdinalIgnoreCase)
+            ? ConnectionKind.TcpIp : ConnectionKind.Usb;
 
     private static string Humanize(string value) => value.Replace('_', ' ');
 

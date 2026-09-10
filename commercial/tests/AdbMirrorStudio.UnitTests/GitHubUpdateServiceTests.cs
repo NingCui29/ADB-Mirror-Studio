@@ -49,6 +49,15 @@ public sealed class GitHubUpdateServiceTests
     }
 
     [Fact]
+    public async Task CheckAsync_DoesNotOfferSameVersionWithShortCurrentVersion()
+    {
+        using var client = ClientFor("V1.0.0");
+        var service = new GitHubUpdateService(client, "V1.0", "owner", "repo");
+
+        Assert.False((await service.CheckAsync()).IsUpdateAvailable);
+    }
+
+    [Fact]
     public async Task CheckAsync_DoesNotOfferDirectInstallWithoutGitHubDigest()
     {
         using var client = ClientFor("V1.2.0", includeDigest: false);
@@ -126,6 +135,229 @@ public sealed class GitHubUpdateServiceTests
         }
     }
 
+    [Fact]
+    public async Task DownloadInstallerAsync_AcceptsPrefixedDigestAndReusesVerifiedCache()
+    {
+        var payload = Encoding.UTF8.GetBytes("verified installer payload");
+        var calls = 0;
+        using var client = new HttpClient(new StubHandler(_ =>
+        {
+            calls++;
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(payload) };
+        }));
+        var service = new GitHubUpdateService(client, "V1.0.0", "owner", "repo");
+        var update = UpdateFor(payload.Length, "sha256:" + Convert.ToHexString(SHA256.HashData(payload)));
+        var directory = NewTemporaryDirectory();
+        try
+        {
+            var path = await service.DownloadInstallerAsync(update, directory);
+
+            Assert.Equal(path, await service.DownloadInstallerAsync(update, directory));
+            Assert.Equal(1, calls);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DownloadInstallerAsync_ConcurrentDownloadsDoNotDeleteEachOthersTemporaryFile()
+    {
+        var payload = Encoding.UTF8.GetBytes("verified installer payload");
+        var enteredRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
+        using var client = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = Interlocked.Increment(ref calls) == 1
+                ? new StreamContent(new GatedStream(payload, enteredRead, releaseRead.Task))
+                : new ByteArrayContent(payload)
+        }));
+        var service = new GitHubUpdateService(client, "V1.0.0", "owner", "repo");
+        var update = UpdateFor(payload.Length, Convert.ToHexString(SHA256.HashData(payload)));
+        var directory = NewTemporaryDirectory();
+        var first = service.DownloadInstallerAsync(update, directory);
+        try
+        {
+            await enteredRead.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var second = await service.DownloadInstallerAsync(update, directory);
+            releaseRead.TrySetResult();
+
+            Assert.Equal(second, await first);
+            Assert.Equal(payload, await File.ReadAllBytesAsync(second));
+            Assert.Single(Directory.EnumerateFiles(directory));
+        }
+        finally
+        {
+            releaseRead.TrySetResult();
+            await first;
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DownloadInstallerAsync_CancellationRemovesOnlyItsOwnTemporaryFile()
+    {
+        var payload = Encoding.UTF8.GetBytes("verified installer payload");
+        var enteredRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var client = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StreamContent(new GatedStream(payload, enteredRead, releaseRead.Task))
+        }));
+        var service = new GitHubUpdateService(client, "V1.0.0", "owner", "repo");
+        var update = UpdateFor(payload.Length, Convert.ToHexString(SHA256.HashData(payload)));
+        var directory = NewTemporaryDirectory();
+        using var cancellation = new CancellationTokenSource();
+        var download = service.DownloadInstallerAsync(update, directory, cancellationToken: cancellation.Token);
+        try
+        {
+            await enteredRead.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var otherDownload = Path.Combine(directory, update.Installer!.FileName + ".download");
+            await File.WriteAllTextAsync(otherDownload, "unrelated download");
+            cancellation.Cancel();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => download);
+            Assert.Equal([otherDownload], Directory.GetFiles(directory));
+        }
+        finally
+        {
+            releaseRead.TrySetResult();
+            try { await download; } catch (OperationCanceledException) { }
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DownloadInstallerAsync_PreCancelledRequestDoesNotTouchExistingFile()
+    {
+        using var client = new HttpClient(new StubHandler(_ => throw new InvalidOperationException("Unexpected request")));
+        var service = new GitHubUpdateService(client, "V1.0.0", "owner", "repo");
+        var update = UpdateFor(32, new string('0', 64));
+        var directory = NewTemporaryDirectory();
+        var path = Path.Combine(directory, update.Installer!.FileName);
+        try
+        {
+            await File.WriteAllTextAsync(path, "existing file");
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                service.DownloadInstallerAsync(update, directory, cancellationToken: new CancellationToken(true)));
+
+            Assert.Equal("existing file", await File.ReadAllTextAsync(path));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("https://example.test/installer.exe")]
+    [InlineData("http://github.com/installer.exe")]
+    [InlineData("https://github.com:444/installer.exe")]
+    [InlineData("https://user:password@github.com/installer.exe")]
+    public async Task DownloadInstallerAsync_RejectsUntrustedRedirect(string finalUrl)
+    {
+        var payload = Encoding.UTF8.GetBytes("verified installer payload");
+        using var client = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            RequestMessage = new HttpRequestMessage(HttpMethod.Get, finalUrl),
+            Content = new ByteArrayContent(payload)
+        }));
+        var service = new GitHubUpdateService(client, "V1.0.0", "owner", "repo");
+        var directory = NewTemporaryDirectory();
+        try
+        {
+            await Assert.ThrowsAsync<InvalidDataException>(() => service.DownloadInstallerAsync(
+                UpdateFor(payload.Length, Convert.ToHexString(SHA256.HashData(payload))), directory));
+
+            Assert.Empty(Directory.EnumerateFiles(directory));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DownloadInstallerAsync_RejectsWrongContentLengthBeforeReadingBody()
+    {
+        var enteredRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var client = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StreamContent(new GatedStream([1, 2, 3], enteredRead, Task.CompletedTask))
+        }));
+        var service = new GitHubUpdateService(client, "V1.0.0", "owner", "repo");
+        var directory = NewTemporaryDirectory();
+        try
+        {
+            await Assert.ThrowsAsync<InvalidDataException>(() =>
+                service.DownloadInstallerAsync(UpdateFor(2, new string('0', 64)), directory));
+
+            Assert.False(enteredRead.Task.IsCompleted);
+            Assert.Empty(Directory.EnumerateFiles(directory));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task AcquireVerifiedInstallerAsync_RejectsTamperingAfterDownloadAndReleasesLock()
+    {
+        var payload = Encoding.UTF8.GetBytes("verified installer payload");
+        using var client = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(payload)
+        }));
+        var service = new GitHubUpdateService(client, "V1.0.0", "owner", "repo");
+        var update = UpdateFor(payload.Length, Convert.ToHexString(SHA256.HashData(payload)));
+        var directory = NewTemporaryDirectory();
+        try
+        {
+            var path = await service.DownloadInstallerAsync(update, directory);
+            payload[0] ^= 1;
+            await File.WriteAllBytesAsync(path, payload);
+
+            await Assert.ThrowsAsync<InvalidDataException>(() => service.AcquireVerifiedInstallerAsync(update, path));
+            File.Delete(path);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task AcquireVerifiedInstallerAsync_PreventsChangesUntilLeaseIsDisposed()
+    {
+        var payload = Encoding.UTF8.GetBytes("verified installer payload");
+        using var client = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(payload)
+        }));
+        var service = new GitHubUpdateService(client, "V1.0.0", "owner", "repo");
+        var update = UpdateFor(payload.Length, Convert.ToHexString(SHA256.HashData(payload)));
+        var directory = NewTemporaryDirectory();
+        try
+        {
+            var path = await service.DownloadInstallerAsync(update, directory);
+            using (await service.AcquireVerifiedInstallerAsync(update, path))
+            {
+                Assert.Throws<IOException>(() => File.WriteAllText(path, "tamper"));
+                if (OperatingSystem.IsWindows()) Assert.Throws<IOException>(() => File.Delete(path));
+                Assert.Equal(payload, await File.ReadAllBytesAsync(path));
+            }
+
+            await File.WriteAllTextAsync(path, "lease released");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static HttpClient ClientFor(
         string tag,
         bool includeDigest = true,
@@ -185,5 +417,15 @@ public sealed class GitHubUpdateServiceTests
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken) => Task.FromResult(responseFactory(request));
+    }
+
+    private sealed class GatedStream(byte[] payload, TaskCompletionSource enteredRead, Task releaseRead) : MemoryStream(payload)
+    {
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            enteredRead.TrySetResult();
+            await releaseRead.WaitAsync(cancellationToken);
+            return await base.ReadAsync(buffer, cancellationToken);
+        }
     }
 }

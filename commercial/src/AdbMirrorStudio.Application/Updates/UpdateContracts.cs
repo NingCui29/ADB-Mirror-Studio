@@ -30,4 +30,9 @@ public interface IUpdateService
         string destinationDirectory,
         IProgress<UpdateDownloadProgress>? progress = null,
         CancellationToken cancellationToken = default);
+
+    Task<IDisposable> AcquireVerifiedInstallerAsync(
+        AppUpdateInfo update,
+        string installerPath,
+        CancellationToken cancellationToken = default);
 }

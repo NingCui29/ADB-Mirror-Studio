@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using AdbMirrorStudio.Application.Settings;
 using AdbMirrorStudio.Domain.Settings;
@@ -7,15 +8,18 @@ namespace AdbMirrorStudio.Infrastructure.Persistence;
 
 public sealed class JsonAppSettingsStore(string filePath) : IAppSettingsStore
 {
-    private readonly SemaphoreSlim _gate = new(1, 1);
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> Gates = new(StringComparer.OrdinalIgnoreCase);
+    private readonly SemaphoreSlim _gate = Gates.GetOrAdd(Path.GetFullPath(filePath), _ => new SemaphoreSlim(1, 1));
+    private readonly string _filePath = Path.GetFullPath(filePath);
 
     public async Task<AppSettings> LoadAsync(CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            if (!File.Exists(filePath)) return AppSettings.Default;
-            await using var stream = File.OpenRead(filePath);
+            if (!File.Exists(_filePath)) return AppSettings.Default;
+            await using var stream = new FileStream(_filePath, FileMode.Open, FileAccess.Read,
+                FileShare.Read | FileShare.Delete, 4096, FileOptions.Asynchronous);
             return await JsonSerializer.DeserializeAsync(
                     stream,
                     AdbMirrorStudioJsonContext.Default.AppSettings,
@@ -36,13 +40,13 @@ public sealed class JsonAppSettingsStore(string filePath) : IAppSettingsStore
     {
         ArgumentNullException.ThrowIfNull(settings);
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        var temporaryPath = filePath + ".tmp";
+        var temporaryPath = _filePath + $".{Guid.NewGuid():N}.tmp";
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+            Directory.CreateDirectory(Path.GetDirectoryName(_filePath)!);
             await using (var stream = new FileStream(
                 temporaryPath,
-                FileMode.Create,
+                FileMode.CreateNew,
                 FileAccess.Write,
                 FileShare.None,
                 4096,
@@ -57,7 +61,15 @@ public sealed class JsonAppSettingsStore(string filePath) : IAppSettingsStore
                 await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
             }
 
-            File.Move(temporaryPath, filePath, overwrite: true);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (File.Exists(_filePath))
+            {
+                File.Replace(temporaryPath, _filePath, destinationBackupFileName: null);
+            }
+            else
+            {
+                File.Move(temporaryPath, _filePath);
+            }
         }
         finally
         {
@@ -65,7 +77,7 @@ public sealed class JsonAppSettingsStore(string filePath) : IAppSettingsStore
             {
                 if (File.Exists(temporaryPath)) File.Delete(temporaryPath);
             }
-            catch (IOException)
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
                 // Preserve the primary save result when a scanner briefly locks the temporary file.
             }

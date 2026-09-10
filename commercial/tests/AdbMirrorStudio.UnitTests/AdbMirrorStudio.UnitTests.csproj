@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Compile Include="../../src/AdbMirrorStudio.App/ViewModels/MainViewModel.cs" Link="App/MainViewModel.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -87,6 +87,51 @@ public sealed class JsonAppSettingsStoreTests : IDisposable
         Assert.False(upgraded.AutoReconnect);
     }
 
+    [Fact]
+    public async Task Save_ConcurrentStoreInstancesKeepCompleteSettingsAndDoNotLeaveTemporaryFiles()
+    {
+        var path = Path.Combine(_directory, "settings.json");
+        var candidates = Enumerable.Range(0, 24)
+            .Select(index => AppSettings.Default with { LastEndpoint = $"{index}:" + new string('x', 64 * 1024) })
+            .ToArray();
+
+        await Task.WhenAll(candidates.Select(settings => new JsonAppSettingsStore(path).SaveAsync(settings)));
+        var actual = await new JsonAppSettingsStore(path).LoadAsync();
+
+        Assert.Contains(candidates, item => item.LastEndpoint == actual.LastEndpoint);
+        Assert.Equal([path], Directory.GetFiles(_directory));
+    }
+
+    [Fact]
+    public async Task Save_PreCancelledOperationPreservesSavedSettings()
+    {
+        var path = Path.Combine(_directory, "settings.json");
+        var store = new JsonAppSettingsStore(path);
+        await store.SaveAsync(AppSettings.Default with { LastEndpoint = "original.local:5555" });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.SaveAsync(AppSettings.Default, new CancellationToken(true)));
+
+        Assert.Equal("original.local:5555", (await store.LoadAsync()).LastEndpoint);
+        Assert.Equal([path], Directory.GetFiles(_directory));
+    }
+
+    [Fact]
+    public async Task Save_CanReplaceFileWhileAnotherReaderRetainsPreviousSnapshot()
+    {
+        var path = Path.Combine(_directory, "settings.json");
+        var store = new JsonAppSettingsStore(path);
+        await store.SaveAsync(AppSettings.Default);
+        await using var previousSnapshot = new FileStream(path, FileMode.Open, FileAccess.Read,
+            FileShare.Read | FileShare.Delete);
+
+        await store.SaveAsync(AppSettings.Default with { Theme = "Dark" });
+
+        Assert.Equal("Dark", (await store.LoadAsync()).Theme);
+        using var reader = new StreamReader(previousSnapshot);
+        Assert.Contains("System", await reader.ReadToEndAsync());
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_directory)) Directory.Delete(_directory, recursive: true);

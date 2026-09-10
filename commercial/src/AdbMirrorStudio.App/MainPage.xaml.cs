@@ -63,6 +63,7 @@ public sealed partial class MainPage : Page
     {
         if (_shutdown) return;
         _shutdown = true;
+        IsEnabled = false;
         _autoRefreshTimer.Stop();
         _autoRefreshTimer.Tick -= AutoRefreshTimer_Tick;
         ViewModel?.Dispose();
@@ -225,18 +226,10 @@ public sealed partial class MainPage : Page
                 break;
             case "files":
                 FilesView.Visibility = Visibility.Visible;
-                if (TransferDeviceSelector.SelectedIndex < 0 && TransferDeviceSelector.Items.Count > 0)
-                {
-                    TransferDeviceSelector.SelectedIndex = 0;
-                }
                 TransferDeviceSelector?.Focus(FocusState.Programmatic);
                 break;
             case "tools":
                 ToolsView.Visibility = Visibility.Visible;
-                if (ToolsDeviceSelector.SelectedIndex < 0 && ToolsDeviceSelector.Items.Count > 0)
-                {
-                    ToolsDeviceSelector.SelectedIndex = 0;
-                }
                 ToolsDeviceSelector?.Focus(FocusState.Programmatic);
                 break;
             default:
@@ -304,7 +297,7 @@ public sealed partial class MainPage : Page
         foreach (var filter in filters) picker.FileTypeFilter.Add(filter);
         InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(app.MainWindow));
         var file = await picker.PickSingleFileAsync();
-        if (file is not null) ViewModel.TransferFilePath = file.Path;
+        if (file is not null && !_shutdown) ViewModel.ApkFilePath = file.Path;
     }
 
     private async void InstallApk_Click(object sender, RoutedEventArgs e)
@@ -323,7 +316,7 @@ public sealed partial class MainPage : Page
     {
         if (ViewModel is null) return;
         var details = await ViewModel.GetDeviceDetailsAsync(ViewModel.SelectedDeviceSerial);
-        if (details is null) return;
+        if (details is null || _shutdown) return;
 
         var battery = details.BatteryLevel is null
             ? details.BatteryStatus
@@ -361,21 +354,23 @@ public sealed partial class MainPage : Page
     private async void AppAction_Click(object sender, RoutedEventArgs e)
     {
         if (ViewModel is null || sender is not FrameworkElement { Tag: string action }) return;
+        var serial = ViewModel.SelectedDeviceSerial;
+        var packageName = ViewModel.SelectedAppPackage;
         if (action == "uninstall")
         {
-            var target = ViewModel.GetDeviceLabel(ViewModel.SelectedDeviceSerial);
+            var target = ViewModel.GetDeviceLabel(serial);
             var dialog = new ContentDialog
             {
                 XamlRoot = XamlRoot,
                 Title = "确认卸载应用",
-                Content = $"将从设备 {target} 卸载 {ViewModel.SelectedAppPackage} 并删除其应用数据。",
+                Content = $"将从设备 {target} 卸载 {packageName} 并删除其应用数据。",
                 PrimaryButtonText = "卸载",
                 CloseButtonText = "取消",
                 DefaultButton = ContentDialogButton.Close
             };
             if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
         }
-        await ViewModel.RunAppActionAsync(action);
+        if (!_shutdown) await ViewModel.RunAppActionAsync(action, serial, packageName);
     }
 
     private async void UninstallPackage_Click(object sender, RoutedEventArgs e)
@@ -385,7 +380,7 @@ public sealed partial class MainPage : Page
         var serial = ViewModel.SelectedDeviceSerial;
         if (string.IsNullOrWhiteSpace(packageName) || string.IsNullOrWhiteSpace(serial))
         {
-            await ViewModel.UninstallPackageByNameAsync();
+            await ViewModel.UninstallPackageByNameAsync(serial, packageName);
             return;
         }
 
@@ -398,9 +393,9 @@ public sealed partial class MainPage : Page
             CloseButtonText = "取消",
             DefaultButton = ContentDialogButton.Close
         };
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary && !_shutdown)
         {
-            await ViewModel.UninstallPackageByNameAsync();
+            await ViewModel.UninstallPackageByNameAsync(serial, packageName);
         }
     }
 
@@ -411,7 +406,7 @@ public sealed partial class MainPage : Page
         var command = ViewModel.ShellCommand.Trim();
         if (string.IsNullOrWhiteSpace(serial) || string.IsNullOrWhiteSpace(command))
         {
-            await ViewModel.RunDeviceShellCommandAsync();
+            await ViewModel.RunDeviceShellCommandAsync(serial, command);
             return;
         }
 
@@ -424,9 +419,9 @@ public sealed partial class MainPage : Page
             CloseButtonText = "取消",
             DefaultButton = ContentDialogButton.Close
         };
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary && !_shutdown)
         {
-            await ViewModel.RunDeviceShellCommandAsync();
+            await ViewModel.RunDeviceShellCommandAsync(serial, command);
         }
     }
 
@@ -448,6 +443,7 @@ public sealed partial class MainPage : Page
     private async void SaveScreenshot_Click(object sender, RoutedEventArgs e)
     {
         if (ViewModel is null || Microsoft.UI.Xaml.Application.Current is not App { MainWindow: not null } app) return;
+        var serial = ViewModel.SelectedDeviceSerial;
         var picker = new FileSavePicker
         {
             SuggestedStartLocation = PickerLocationId.PicturesLibrary,
@@ -456,15 +452,16 @@ public sealed partial class MainPage : Page
         picker.FileTypeChoices.Add("PNG 图片", [".png"]);
         InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(app.MainWindow));
         var file = await picker.PickSaveFileAsync();
-        if (file is not null)
+        if (file is not null && !_shutdown)
         {
-            await ViewModel.CaptureScreenshotAsync(ViewModel.SelectedDeviceSerial, file.Path);
+            await ViewModel.CaptureScreenshotAsync(serial, file.Path);
         }
     }
 
     private async void ExportLogcat_Click(object sender, RoutedEventArgs e)
     {
         if (ViewModel is null || Microsoft.UI.Xaml.Application.Current is not App { MainWindow: not null } app) return;
+        var serial = ViewModel.SelectedDeviceSerial;
         var picker = new FileSavePicker
         {
             SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
@@ -473,9 +470,9 @@ public sealed partial class MainPage : Page
         picker.FileTypeChoices.Add("文本日志", [".txt"]);
         InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(app.MainWindow));
         var file = await picker.PickSaveFileAsync();
-        if (file is not null)
+        if (file is not null && !_shutdown)
         {
-            await ViewModel.ExportLogcatAsync(ViewModel.SelectedDeviceSerial, file.Path);
+            await ViewModel.ExportLogcatAsync(serial, file.Path);
         }
     }
 
@@ -562,7 +559,7 @@ public sealed partial class MainPage : Page
 
     private async void AutoRefreshTimer_Tick(object? sender, object e)
     {
-        if (!_shutdown && ViewModel is { AutoRefresh: true, IsBusy: false }) await ViewModel.RefreshAsync();
+        if (!_shutdown && ViewModel is { AutoRefresh: true, IsBusy: false }) await ViewModel.RefreshAsync(silent: true);
     }
 
     private async Task ShowFirstRunDialogAsync()
@@ -606,21 +603,25 @@ public sealed partial class MainPage : Page
     private async void DownloadAndInstallUpdate_Click(object sender, RoutedEventArgs e)
     {
         if (ViewModel is null || !ViewModel.CanDownloadAndInstallUpdate) return;
+        var update = ViewModel.AvailableUpdate;
+        if (update is null) return;
         var result = await new ContentDialog
         {
             XamlRoot = XamlRoot,
-            Title = $"安装 {ViewModel.LatestUpdateVersion}",
+            Title = $"安装 {update.LatestVersion}",
             Content = "应用将从官方 GitHub Release 下载 Windows x64 安装包，核对文件大小和 SHA256 后启动安装程序，并关闭当前应用。安装程序尚未配置代码签名，Windows 可能显示“未知发布者”。",
             PrimaryButtonText = "下载并安装",
             CloseButtonText = "取消",
             DefaultButton = ContentDialogButton.Primary
         }.ShowAsync();
-        if (result != ContentDialogResult.Primary) return;
+        if (result != ContentDialogResult.Primary || _shutdown) return;
 
-        var installerPath = await ViewModel.DownloadAndVerifyUpdateAsync();
+        var installerPath = await ViewModel.DownloadAndVerifyUpdateAsync(update);
         if (string.IsNullOrWhiteSpace(installerPath) || _shutdown) return;
         try
         {
+            using var verifiedInstaller = await ViewModel.AcquireVerifiedInstallerAsync(update, installerPath);
+            if (_shutdown) return;
             using var installer = Process.Start(new ProcessStartInfo(installerPath)
             {
                 UseShellExecute = true,
@@ -629,11 +630,12 @@ public sealed partial class MainPage : Page
             if (installer is null) throw new InvalidOperationException("Windows 未能启动安装程序。");
             if (Microsoft.UI.Xaml.Application.Current is App { MainWindow: not null } app)
             {
-                app.MainWindow.Close();
+                await app.ShutdownAsync();
             }
         }
         catch (Exception exception)
         {
+            if (_shutdown) return;
             CrashLog.Write(exception);
             await new ContentDialog
             {

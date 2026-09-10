@@ -37,8 +37,17 @@ public sealed class DiagnosticsService(
             return new DiagnosticItem(id, title, $"缺少文件：{Path.GetFileName(path)}", DiagnosticSeverity.Error);
         }
 
-        var size = new FileInfo(path).Length;
-        return new DiagnosticItem(id, title, $"文件完整，{size:N0} 字节", DiagnosticSeverity.Success);
+        try
+        {
+            var size = new FileInfo(path).Length;
+            return size == 0
+                ? new DiagnosticItem(id, title, "组件文件为空，请重新安装", DiagnosticSeverity.Error)
+                : new DiagnosticItem(id, title, $"文件存在，{size:N0} 字节", DiagnosticSeverity.Success);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return new DiagnosticItem(id, title, exception.Message, DiagnosticSeverity.Error);
+        }
     }
 
     private async Task<DiagnosticItem> CheckCommandAsync(
@@ -62,6 +71,12 @@ public sealed class DiagnosticsService(
                     Path.GetDirectoryName(executable),
                     Timeout: TimeSpan.FromSeconds(12)),
                 cancellationToken).ConfigureAwait(false);
+
+            cancellationToken.ThrowIfCancellationRequested();
+            if (result.Cancelled)
+            {
+                throw new OperationCanceledException("诊断检查已取消。", cancellationToken);
+            }
 
             if (result.TimedOut)
             {
@@ -105,4 +120,3 @@ public sealed class DiagnosticsService(
             .Select(line => line.Trim())
             .FirstOrDefault(line => line.Length > 0 && !line.StartsWith('*'));
 }
-

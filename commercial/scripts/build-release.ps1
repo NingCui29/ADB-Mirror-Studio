@@ -4,6 +4,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'release-common.ps1')
 $commercialRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $workspaceRoot = (Resolve-Path (Join-Path $commercialRoot '..')).Path
 $localDotnet = Join-Path $workspaceRoot '.tools\dotnet\dotnet.exe'
@@ -12,20 +13,13 @@ $project = Join-Path $commercialRoot 'src\AdbMirrorStudio.App\AdbMirrorStudio.Ap
 $tests = Join-Path $commercialRoot 'tests\AdbMirrorStudio.UnitTests\AdbMirrorStudio.UnitTests.csproj'
 $privacyAudit = Join-Path $commercialRoot 'scripts\test-privacy.ps1'
 $artifactRoot = Join-Path $commercialRoot 'artifacts\release'
-[xml]$buildProperties = Get-Content (Join-Path $commercialRoot 'Directory.Build.props')
-$versionNode = $buildProperties.SelectSingleNode('/Project/PropertyGroup/Version')
-if ($versionNode -eq $null -or [string]::IsNullOrWhiteSpace($versionNode.InnerText)) {
-    throw 'Directory.Build.props 中缺少 Version。'
-}
-$productVersion = "V$($versionNode.InnerText.Trim())"
+$releaseVersion = Get-ReleaseVersion -CommercialRoot $commercialRoot
+$productVersion = "V$($releaseVersion.Version)"
 $archivePath = Join-Path $artifactRoot "AdbMirrorStudio-$productVersion-win-x64.zip"
 $stagingDirectory = Join-Path $artifactRoot ".staging-$([Guid]::NewGuid().ToString('N'))"
 $publishDirectory = Join-Path $stagingDirectory 'win-x64'
 
-if (-not $artifactRoot.StartsWith($commercialRoot, [System.StringComparison]::OrdinalIgnoreCase) -or
-    -not $stagingDirectory.StartsWith($artifactRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
-    throw '拒绝清理项目目录以外的发布路径。'
-}
+Assert-ReleaseChildPath -Root $commercialRoot -Path $stagingDirectory
 
 New-Item -ItemType Directory -Path $publishDirectory -Force | Out-Null
 try {
@@ -88,10 +82,11 @@ try {
         throw "发布目录包含本机用户路径：$($localPathFiles -join ', ')"
     }
 
-    if (Test-Path -LiteralPath $archivePath) {
-        Remove-Item -LiteralPath $archivePath -Force
-    }
-    Compress-Archive -Path (Join-Path $publishDirectory '*') -DestinationPath $archivePath -CompressionLevel Optimal
+    Assert-ReleasePayload -PayloadDirectory $publishDirectory -ExpectedFileVersion $releaseVersion.FileVersion
+    $stagedArchive = Join-Path $stagingDirectory 'portable.zip'
+    [IO.Compression.ZipFile]::CreateFromDirectory($publishDirectory, $stagedArchive, [IO.Compression.CompressionLevel]::Optimal, $false)
+    # Retain the last working archive if publication or compression fails.
+    [IO.File]::Move($stagedArchive, $archivePath, $true)
 
     $hash = Get-FileHash -LiteralPath $archivePath -Algorithm SHA256
     [pscustomobject]@{
@@ -102,7 +97,5 @@ try {
     }
 }
 finally {
-    if (Test-Path -LiteralPath $stagingDirectory) {
-        Remove-Item -LiteralPath $stagingDirectory -Recurse -Force
-    }
+    Remove-ReleaseStagingDirectory -Root $commercialRoot -StagingDirectory $stagingDirectory
 }

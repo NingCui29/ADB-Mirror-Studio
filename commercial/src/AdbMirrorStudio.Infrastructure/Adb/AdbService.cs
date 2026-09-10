@@ -22,22 +22,29 @@ public sealed class AdbService(ICommandRunner commandRunner, string adbPath) : I
     {
         var normalized = AdbEndpoint.Normalize(endpoint);
         var result = await ExecuteAsync(["connect", normalized], TimeSpan.FromSeconds(30), cancellationToken);
+        EnsureAcknowledged(result, "ADB 未确认连接成功。", "connected to ", "already connected to ");
         return FirstOutput(result);
     }
 
     public async Task<string> PairAsync(string endpoint, string pairingCode, CancellationToken cancellationToken = default)
     {
         var normalized = AdbEndpoint.Normalize(endpoint);
-        if (string.IsNullOrWhiteSpace(pairingCode)) throw new ArgumentException("配对码不能为空。", nameof(pairingCode));
+        var normalizedCode = pairingCode?.Trim();
+        if (normalizedCode is null || normalizedCode.Length != 6 || normalizedCode.Any(character => character is < '0' or > '9'))
+            throw new ArgumentException("请输入设备显示的六位数字配对码。", nameof(pairingCode));
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!File.Exists(adbPath)) throw new FileNotFoundException("未找到 adb.exe。", adbPath);
 
         var request = new CommandRequest(
             adbPath,
-            ["pair", normalized, pairingCode.Trim()],
+            ["pair", normalized, normalizedCode],
             Path.GetDirectoryName(adbPath),
             Timeout: TimeSpan.FromSeconds(30),
             SensitiveArguments: true);
         var result = await commandRunner.RunAsync(request, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         EnsureSuccess(result);
+        EnsureAcknowledged(result, "ADB 未确认配对成功。", "Successfully paired to ");
         return FirstOutput(result);
     }
 
@@ -83,12 +90,8 @@ public sealed class AdbService(ICommandRunner commandRunner, string adbPath) : I
     {
         ValidateSerial(serial);
         ValidateLocalFile(localPath);
-        if (string.IsNullOrWhiteSpace(remoteDirectory))
-        {
-            throw new ArgumentException("远程目录不能为空。", nameof(remoteDirectory));
-        }
-
-        var normalizedDirectory = remoteDirectory.Trim().Replace('\\', '/').TrimEnd('/');
+        ValidateRemotePath(remoteDirectory, nameof(remoteDirectory));
+        var normalizedDirectory = remoteDirectory.Trim().TrimEnd('/');
         var remotePath = $"{normalizedDirectory}/{Path.GetFileName(localPath)}";
         var result = await ExecuteAsync(
             ["-s", serial.Trim(), "push", Path.GetFullPath(localPath), remotePath],
@@ -99,9 +102,14 @@ public sealed class AdbService(ICommandRunner commandRunner, string adbPath) : I
 
     public async Task<bool> IsOnlineAsync(string serial, CancellationToken cancellationToken = default)
     {
+        ValidateSerial(serial);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!File.Exists(adbPath)) throw new FileNotFoundException("未找到 adb.exe。", adbPath);
         var result = await commandRunner.RunAsync(
-            new CommandRequest(adbPath, ["-s", serial, "get-state"], Path.GetDirectoryName(adbPath), Timeout: TimeSpan.FromSeconds(10)),
+            new CommandRequest(adbPath, ["-s", serial.Trim(), "get-state"], Path.GetDirectoryName(adbPath), Timeout: TimeSpan.FromSeconds(10)),
             cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (result.Cancelled) throw new OperationCanceledException("ADB 操作已取消。", cancellationToken);
         return result.IsSuccess && result.StandardOutput.Trim() == "device";
     }
 
@@ -155,12 +163,16 @@ public sealed class AdbService(ICommandRunner commandRunner, string adbPath) : I
         }
 
         var fullPath = Path.GetFullPath(localPath);
+        cancellationToken.ThrowIfCancellationRequested();
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
         var remotePath = $"/data/local/tmp/adb-mirror-{Guid.NewGuid():N}.png";
+        var temporaryPath = Path.Combine(Path.GetDirectoryName(fullPath)!, $".adb-mirror-{Guid.NewGuid():N}.png");
         try
         {
             await ExecuteAsync(["-s", serial.Trim(), "shell", "screencap", "-p", remotePath], TimeSpan.FromSeconds(30), cancellationToken);
-            await ExecuteAsync(["-s", serial.Trim(), "pull", remotePath, fullPath], TimeSpan.FromMinutes(2), cancellationToken);
+            await ExecuteAsync(["-s", serial.Trim(), "pull", remotePath, temporaryPath], TimeSpan.FromMinutes(2), cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            File.Move(temporaryPath, fullPath, overwrite: true);
             return fullPath;
         }
         finally
@@ -172,6 +184,14 @@ public sealed class AdbService(ICommandRunner commandRunner, string adbPath) : I
             catch
             {
                 // A temporary screenshot must not hide the primary result.
+            }
+            try
+            {
+                if (File.Exists(temporaryPath)) File.Delete(temporaryPath);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // Preserve the capture result if another process holds the local temporary file.
             }
         }
     }
@@ -196,17 +216,151 @@ public sealed class AdbService(ICommandRunner commandRunner, string adbPath) : I
         CancellationToken cancellationToken = default)
     {
         ValidateSerial(serial);
-        if (string.IsNullOrWhiteSpace(remotePath) || !remotePath.Trim().StartsWith('/'))
-        {
-            throw new ArgumentException("设备路径必须是以 / 开头的绝对路径。", nameof(remotePath));
-        }
+        ValidateRemotePath(remotePath, nameof(remotePath));
         if (string.IsNullOrWhiteSpace(localDirectory)) throw new ArgumentException("请选择本地保存目录。", nameof(localDirectory));
+        cancellationToken.ThrowIfCancellationRequested();
         var fullDirectory = Path.GetFullPath(localDirectory);
-        Directory.CreateDirectory(fullDirectory);
+        var remoteParts = remotePath.Trim().Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (remoteParts.Any(part => part is "." or ".."))
+            throw new ArgumentException("设备下载路径不能包含 . 或 .. 路径段。", nameof(remotePath));
+        var normalizedRemote = "/" + string.Join('/', remoteParts);
+        var rootName = remoteParts.LastOrDefault() ?? "root";
+        ValidateWindowsFileName(rootName);
+        var destination = Path.Combine(fullDirectory, rootName);
+        var normalizedSerial = serial.Trim();
+        var quotedRemote = QuoteRemoteShellArgument(normalizedRemote);
+        var kind = await ExecuteAsync(
+            ["-s", normalizedSerial, "shell", $"if [ -d {quotedRemote} ]; then printf directory; else printf file; fi"],
+            TimeSpan.FromSeconds(15), cancellationToken);
+
+        if (kind.StandardOutput.Trim() == "file")
+        {
+            ValidateDownloadTarget(fullDirectory, destination, isDirectory: false);
+            cancellationToken.ThrowIfCancellationRequested();
+            Directory.CreateDirectory(fullDirectory);
+            await PullSingleFileAsync(normalizedSerial, normalizedRemote, destination, cancellationToken);
+            return $"已下载至 {destination}";
+        }
+        if (kind.StandardOutput.Trim() != "directory") throw new AdbCommandException("无法识别设备下载路径的类型。");
+
+        // Windows adb's CRT basename/dirname can corrupt UTF-8. Enumerate on Android, then
+        // create every directory in .NET and pull each file to an explicit local filename.
+        var directories = await EnumerateRemotePathsAsync(normalizedSerial, quotedRemote, "d", cancellationToken);
+        var files = await EnumerateRemotePathsAsync(normalizedSerial, quotedRemote, "f", cancellationToken);
+        if (directories.Count + files.Count > 10000)
+            throw new AdbCommandException("设备目录超过 10000 个条目，请分批下载。");
+        if (!directories.Contains(normalizedRemote, StringComparer.Ordinal))
+            throw new AdbCommandException("设备目录列表不完整，请刷新后重试。");
+
+        var targets = new Dictionary<string, (string RemotePath, bool IsDirectory)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in directories.Select(path => (Path: path, IsDirectory: true))
+            .Concat(files.Select(path => (Path: path, IsDirectory: false))))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var relative = entry.Path == normalizedRemote ? string.Empty
+                : entry.Path.StartsWith(normalizedRemote.TrimEnd('/') + "/", StringComparison.Ordinal)
+                    ? entry.Path[(normalizedRemote.TrimEnd('/').Length + 1)..]
+                    : throw new AdbCommandException("设备目录列表包含下载根目录以外的路径。");
+            var components = relative.Length == 0 ? [] : relative.Split('/');
+            foreach (var component in components) ValidateWindowsFileName(component);
+            var localPath = components.Aggregate(destination, Path.Combine);
+            ValidateDownloadTarget(fullDirectory, localPath, entry.IsDirectory);
+            if (!targets.TryAdd(localPath, (entry.Path, entry.IsDirectory)))
+                throw new AdbCommandException("设备目录存在 Windows 无法区分的同名条目，请分别下载。");
+        }
+
+        foreach (var target in targets.Where(item => !string.Equals(item.Key, destination, StringComparison.OrdinalIgnoreCase)))
+        {
+            if (!targets.TryGetValue(Path.GetDirectoryName(target.Key)!, out var parent) || !parent.IsDirectory)
+                throw new AdbCommandException("设备目录结构在枚举过程中发生变化，请重试下载。");
+        }
+        foreach (var target in targets.Where(item => item.Value.IsDirectory).OrderBy(item => item.Key.Length))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ValidateDownloadTarget(fullDirectory, target.Key, isDirectory: true);
+            Directory.CreateDirectory(target.Key);
+        }
+        foreach (var target in targets.Where(item => !item.Value.IsDirectory))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ValidateDownloadTarget(fullDirectory, target.Key, isDirectory: false);
+            await PullSingleFileAsync(normalizedSerial, target.Value.RemotePath, target.Key, cancellationToken);
+        }
+        return $"已下载 {files.Count} 个文件至 {destination}";
+    }
+
+    private async Task<IReadOnlyList<string>> EnumerateRemotePathsAsync(
+        string serial, string quotedRemote, string type, CancellationToken cancellationToken)
+    {
+        const string terminator = "\0ADB_MIRROR_LIST_END\0";
         var result = await ExecuteAsync(
-            ["-s", serial.Trim(), "pull", remotePath.Trim(), fullDirectory],
-            TimeSpan.FromMinutes(5), cancellationToken);
-        return FirstOutput(result);
+            ["-s", serial, "shell", $"find -L {quotedRemote} -type {type} -print0 && printf '\\0ADB_MIRROR_LIST_END\\0'"],
+            TimeSpan.FromSeconds(30), cancellationToken);
+        if (result.StandardOutput.Length > 1_000_000 || !result.StandardOutput.EndsWith(terminator, StringComparison.Ordinal))
+            throw new AdbCommandException("设备目录列表过大或输出不完整，请分批下载。");
+        var paths = result.StandardOutput[..^terminator.Length].Split('\0', StringSplitOptions.RemoveEmptyEntries);
+        if (paths.Length > 10000) throw new AdbCommandException("设备目录超过 10000 个条目，请分批下载。");
+        return paths;
+    }
+
+    private async Task PullSingleFileAsync(string serial, string remotePath, string destination, CancellationToken cancellationToken)
+    {
+        var temporaryPath = Path.Combine(Path.GetDirectoryName(destination)!, $".adb-mirror-{Guid.NewGuid():N}.download");
+        try
+        {
+            // An existing regular target also makes adb reject a source that changed into a
+            // directory since enumeration, instead of recursively creating an unchecked tree.
+            using (new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None)) { }
+            await ExecuteAsync(["-s", serial, "pull", remotePath, temporaryPath], TimeSpan.FromMinutes(5), cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            File.Move(temporaryPath, destination, overwrite: true);
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(temporaryPath)) File.Delete(temporaryPath);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // Preserve the transfer failure if a scanner is holding the partial download.
+            }
+        }
+    }
+
+    private static string QuoteRemoteShellArgument(string value) => "'" + value.Replace("'", "'\\''", StringComparison.Ordinal) + "'";
+
+    private static void ValidateWindowsFileName(string name)
+    {
+        var stem = name.Split('.')[0].TrimEnd(' ').ToUpperInvariant();
+        if (string.IsNullOrEmpty(name) || name.Length > 255 || name is "." or ".." || name.EndsWith('.') || name.EndsWith(' ')
+            || name.Any(character => char.IsControl(character) || "<>:\"/\\|?*".Contains(character))
+            || stem is "CON" or "PRN" or "AUX" or "NUL" or "CONIN$" or "CONOUT$"
+            || (stem.Length == 4 && (stem.StartsWith("COM", StringComparison.Ordinal) || stem.StartsWith("LPT", StringComparison.Ordinal))
+                && "123456789¹²³".Contains(stem[3])))
+            throw new AdbCommandException("设备目录包含 Windows 无法保存的文件名，请先在设备上重命名后重试。");
+    }
+
+    private static void ValidateDownloadTarget(string downloadRoot, string target, bool isDirectory)
+    {
+        var fullRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(downloadRoot));
+        var fullTarget = Path.GetFullPath(target);
+        var rootPrefix = Path.EndsInDirectorySeparator(fullRoot) ? fullRoot : fullRoot + Path.DirectorySeparatorChar;
+        if (!fullTarget.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+            throw new AdbCommandException("下载文件路径超出本地保存目录。");
+        for (var current = fullTarget; current.Length >= fullRoot.Length; current = Path.GetDirectoryName(current)!)
+        {
+            try
+            {
+                if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+                    throw new AdbCommandException("本地下载路径包含符号链接或目录联接，请选择普通保存目录。");
+            }
+            catch (FileNotFoundException) { }
+            catch (DirectoryNotFoundException) { }
+            if (current == fullRoot) break;
+        }
+        if (isDirectory ? File.Exists(fullTarget) : Directory.Exists(fullTarget))
+            throw new AdbCommandException("本地已有同名的文件或目录，与设备目录结构冲突。");
     }
 
     public async Task SendKeyEventAsync(string serial, int keyCode, CancellationToken cancellationToken = default)
@@ -225,10 +379,16 @@ public sealed class AdbService(ICommandRunner commandRunner, string adbPath) : I
         var arguments = new List<string> { "-s", serial.Trim(), "shell", "pm", "list", "packages" };
         if (!includeSystemApps) arguments.Add("-3");
         var result = await ExecuteAsync(arguments, TimeSpan.FromSeconds(30), cancellationToken);
-        return result.StandardOutput.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
-            .Select(line => line.Trim())
-            .Where(line => line.StartsWith("package:", StringComparison.Ordinal))
-            .Select(line => new InstalledApp(line[8..], includeSystemApps))
+        var systemPackages = new HashSet<string>(StringComparer.Ordinal);
+        if (includeSystemApps)
+        {
+            var systemResult = await ExecuteAsync(
+                ["-s", serial.Trim(), "shell", "pm", "list", "packages", "-s"],
+                TimeSpan.FromSeconds(30), cancellationToken);
+            systemPackages.UnionWith(ParsePackageNames(systemResult.StandardOutput));
+        }
+        return ParsePackageNames(result.StandardOutput)
+            .Select(package => new InstalledApp(package, systemPackages.Contains(package)))
             .OrderBy(app => app.PackageName, StringComparer.OrdinalIgnoreCase)
             .ToArray();
     }
@@ -261,15 +421,18 @@ public sealed class AdbService(ICommandRunner commandRunner, string adbPath) : I
     {
         ValidateSerial(serial);
         ValidateShellCommand(command);
+        cancellationToken.ThrowIfCancellationRequested();
         if (!File.Exists(adbPath)) throw new FileNotFoundException("未找到 adb.exe。", adbPath);
         var result = await commandRunner.RunAsync(
             new CommandRequest(
                 adbPath,
-                ["-s", serial.Trim(), "shell", "sh", "-c", command.Trim()],
+                // adb joins shell arguments with spaces; an extra sh -c would lose the command's arguments.
+                ["-s", serial.Trim(), "shell", command.Trim()],
                 Path.GetDirectoryName(adbPath),
                 Timeout: TimeSpan.FromMinutes(1),
                 SensitiveArguments: true),
             cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         EnsureSuccess(result);
 
         var output = result.StandardOutput.TrimEnd();
@@ -283,10 +446,12 @@ public sealed class AdbService(ICommandRunner commandRunner, string adbPath) : I
         TimeSpan timeout,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (!File.Exists(adbPath)) throw new FileNotFoundException("未找到 adb.exe。", adbPath);
         var result = await commandRunner.RunAsync(
             new CommandRequest(adbPath, arguments, Path.GetDirectoryName(adbPath), Timeout: timeout),
             cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         EnsureSuccess(result);
         return result;
     }
@@ -297,13 +462,36 @@ public sealed class AdbService(ICommandRunner commandRunner, string adbPath) : I
         if (result.TimedOut) throw new AdbCommandException("ADB 操作超时。");
         if (result.ExitCode != 0)
         {
-            throw new AdbCommandException(FirstOutput(result), result.ExitCode);
+            throw new AdbCommandException(ErrorOutput(result), result.ExitCode);
         }
+    }
+
+    private static void EnsureAcknowledged(CommandResult result, string fallback, params string[] prefixes)
+    {
+        var output = result.StandardOutput.Trim();
+        if (!prefixes.Any(prefix => output.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+        {
+            var details = ErrorOutput(result);
+            throw new AdbCommandException(string.IsNullOrWhiteSpace(details) ? fallback : details, result.ExitCode);
+        }
+    }
+
+    private static IEnumerable<string> ParsePackageNames(string output) =>
+        output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.Trim())
+            .Where(line => line.StartsWith("package:", StringComparison.Ordinal) && line.Length > 8)
+            .Select(line => line[8..])
+            .Distinct(StringComparer.Ordinal);
+
+    private static void ValidateRemotePath(string path, string parameterName)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !path.Trim().StartsWith('/') || path.Any(char.IsControl))
+            throw new ArgumentException("设备路径必须是以 / 开头且不含控制字符的绝对路径。", parameterName);
     }
 
     private static void ValidateSerial(string serial)
     {
-        if (string.IsNullOrWhiteSpace(serial))
+        if (string.IsNullOrWhiteSpace(serial) || serial.Any(char.IsControl))
         {
             throw new ArgumentException("请选择目标设备。", nameof(serial));
         }
@@ -357,6 +545,16 @@ public sealed class AdbService(ICommandRunner commandRunner, string adbPath) : I
 
     private static string FirstOutput(CommandResult result) =>
         (string.IsNullOrWhiteSpace(result.StandardOutput) ? result.StandardError : result.StandardOutput).Trim();
+
+    private static string ErrorOutput(CommandResult result)
+    {
+        var error = result.StandardError.Trim();
+        var output = result.StandardOutput.Trim();
+        if (string.IsNullOrWhiteSpace(error)) return string.IsNullOrWhiteSpace(output)
+            ? result.ExitCode == 0 ? string.Empty : $"ADB 操作失败（退出码 {result.ExitCode}）。"
+            : output;
+        return string.IsNullOrWhiteSpace(output) ? error : $"{error}{Environment.NewLine}{output}";
+    }
 
     private static string EmptyFallback(string value) => string.IsNullOrWhiteSpace(value) ? "—" : value.Trim();
 

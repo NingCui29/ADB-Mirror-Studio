@@ -53,7 +53,8 @@ public sealed record MirrorSession(
     int VideoBitRateMbps = 0,
     string? RecordPath = null,
     MirrorProfile? Profile = null,
-    string? WindowTitle = null);
+    string? WindowTitle = null,
+    bool AudioPlaybackEnabled = true);
 
 public enum MirrorWindowLayout
 {

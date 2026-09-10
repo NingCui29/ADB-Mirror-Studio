@@ -28,6 +28,8 @@ public partial class App : Microsoft.UI.Xaml.Application
     private HttpClient? _httpClient;
     private string? _toolsDirectory;
     private bool _shuttingDown;
+    private bool _shutdownComplete;
+    private Task? _shutdownTask;
     private int _activationRequested;
     internal MainWindow? MainWindow => _window;
 
@@ -63,7 +65,7 @@ public partial class App : Microsoft.UI.Xaml.Application
             IUpdateService updates = new GitHubUpdateService(
                 _httpClient,
                 AppVersionInfo.ProductVersion,
-                "Cuinings",
+                "NingCui29",
                 "ADB-Mirror-Studio");
             IAppSettingsStore settings = new JsonAppSettingsStore(Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -96,6 +98,7 @@ public partial class App : Microsoft.UI.Xaml.Application
 
     private void ActivateExistingWindow()
     {
+        if (_shuttingDown) return;
         var window = _window;
         if (window is null) return;
         var handle = WindowNative.GetWindowHandle(window);
@@ -107,7 +110,16 @@ public partial class App : Microsoft.UI.Xaml.Application
         window.Activate();
     }
 
-    private void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
+    private async void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
+    {
+        if (_shutdownComplete) return;
+        args.Cancel = true;
+        await ShutdownAsync();
+    }
+
+    internal Task ShutdownAsync() => _shutdownTask ??= ShutdownCoreAsync();
+
+    private async Task ShutdownCoreAsync()
     {
         if (_shuttingDown) return;
         _shuttingDown = true;
@@ -115,8 +127,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         try
         {
             _window?.PrepareForShutdown();
-            if (_mirrorSessions is not null) _mirrorSessions.DisposeAsync().AsTask().GetAwaiter().GetResult();
-            if (_toolsDirectory is not null) StopBundledToolProcesses(_toolsDirectory);
+            if (_mirrorSessions is not null) await _mirrorSessions.DisposeAsync();
         }
         catch (Exception exception)
         {
@@ -124,8 +135,15 @@ public partial class App : Microsoft.UI.Xaml.Application
         }
         finally
         {
+            try
+            {
+                if (_toolsDirectory is not null) await Task.Run(() => StopBundledToolProcesses(_toolsDirectory));
+            }
+            catch (Exception exception) { CrashLog.Write(exception); }
             if (_mainAppInstance is not null) _mainAppInstance.Activated -= OnAppInstanceActivated;
             _httpClient?.Dispose();
+            _shutdownComplete = true;
+            _window?.Close();
         }
     }
 

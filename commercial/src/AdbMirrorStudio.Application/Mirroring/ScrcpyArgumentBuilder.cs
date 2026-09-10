@@ -4,7 +4,11 @@ namespace AdbMirrorStudio.Application.Mirroring;
 
 public static class ScrcpyArgumentBuilder
 {
-    public static IReadOnlyList<string> Build(string serial, MirrorProfile profile, string? windowTitle = null)
+    public static IReadOnlyList<string> Build(
+        string serial,
+        MirrorProfile profile,
+        string? windowTitle = null,
+        bool audioPlaybackAvailable = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(serial);
         Validate(profile);
@@ -23,6 +27,7 @@ public static class ScrcpyArgumentBuilder
             arguments.Add($"--video-codec={profile.VideoCodec.ToLowerInvariant()}");
         }
         if (!profile.AudioEnabled) arguments.Add("--no-audio");
+        else if (!audioPlaybackAvailable) arguments.Add("--no-audio-playback");
         if (profile.StayAwake && !profile.ReadOnly) arguments.Add("--stay-awake");
         if (profile.TurnScreenOff && !profile.ReadOnly) arguments.Add("--turn-screen-off");
         if (profile.Fullscreen) arguments.Add("--fullscreen");

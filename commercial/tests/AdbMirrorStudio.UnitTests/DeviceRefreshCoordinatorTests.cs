@@ -30,6 +30,44 @@ public sealed class DeviceRefreshCoordinatorTests
     private static DeviceInfo Device(string serial) =>
         new(serial, "—", "—", DeviceState.Online, ConnectionKind.Usb, DateTimeOffset.UtcNow);
 
+    [Fact]
+    public async Task RefreshAsync_DoesNotPublishCancelledResultWhenServiceIgnoresCancellation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var result = new TaskCompletionSource<IReadOnlyList<DeviceInfo>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var coordinator = new DeviceRefreshCoordinator(new SequencedAdbService(result.Task));
+        var refresh = coordinator.RefreshAsync(cancellation.Token);
+        cancellation.Cancel();
+        result.SetResult([Device("cancelled")]);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => refresh);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_AlreadyCancelledRequestDoesNotInvalidateActiveRefresh()
+    {
+        var result = new TaskCompletionSource<IReadOnlyList<DeviceInfo>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var coordinator = new DeviceRefreshCoordinator(new SequencedAdbService(result.Task));
+        var refresh = coordinator.RefreshAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => coordinator.RefreshAsync(new CancellationToken(true)));
+        result.SetResult([Device("active")]);
+
+        Assert.Equal("active", (await refresh)!.Devices.Single().Serial);
+    }
+
+    [Fact]
+    public async Task InvalidatePendingRefreshes_DiscardsOutstandingSnapshot()
+    {
+        var result = new TaskCompletionSource<IReadOnlyList<DeviceInfo>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var coordinator = new DeviceRefreshCoordinator(new SequencedAdbService(result.Task));
+        var refresh = coordinator.RefreshAsync();
+        coordinator.InvalidatePendingRefreshes();
+        result.SetResult([Device("old")]);
+
+        Assert.Null(await refresh);
+    }
+
     private sealed class SequencedAdbService(params Task<IReadOnlyList<DeviceInfo>>[] results) : IAdbService
     {
         private int _index;

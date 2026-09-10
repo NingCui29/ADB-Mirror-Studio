@@ -17,6 +17,50 @@ public sealed class ScrcpyArgumentBuilderTests
         Assert.Contains("--video-bit-rate=8M", arguments);
         Assert.Contains("--stay-awake", arguments);
         Assert.DoesNotContain("--no-audio", arguments);
+        Assert.DoesNotContain("--no-audio-playback", arguments);
+    }
+
+    [Fact]
+    public void Build_NoAudioOutput_AllowsMirroringWithoutChangingTheAudioPreference()
+    {
+        var profile = MirrorProfile.Balanced;
+
+        var arguments = ScrcpyArgumentBuilder.Build("device", profile, audioPlaybackAvailable: false);
+
+        Assert.Contains("--no-audio-playback", arguments);
+        Assert.DoesNotContain("--no-audio", arguments);
+        Assert.DoesNotContain("--no-video", arguments);
+        Assert.DoesNotContain("--no-playback", arguments);
+        Assert.True(profile.AudioEnabled);
+        Assert.DoesNotContain("--no-audio-playback",
+            ScrcpyArgumentBuilder.Build("device", profile, audioPlaybackAvailable: true));
+    }
+
+    [Theory]
+    [InlineData("mp4")]
+    [InlineData("mkv")]
+    public void Build_NoAudioOutput_PreservesRecordingAudio(string extension)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"recording.{extension}");
+        var profile = MirrorProfile.Balanced with { RecordPath = path };
+
+        var arguments = ScrcpyArgumentBuilder.Build("device", profile, audioPlaybackAvailable: false);
+
+        Assert.Contains("--no-audio-playback", arguments);
+        Assert.DoesNotContain("--no-audio", arguments);
+        Assert.Contains($"--record={path}", arguments);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Build_AudioCaptureDisabled_RespectsTheProfile(bool audioPlaybackAvailable)
+    {
+        var arguments = ScrcpyArgumentBuilder.Build("device", MirrorProfile.Performance,
+            audioPlaybackAvailable: audioPlaybackAvailable);
+
+        Assert.Contains("--no-audio", arguments);
+        Assert.DoesNotContain("--no-audio-playback", arguments);
     }
 
     [Fact]

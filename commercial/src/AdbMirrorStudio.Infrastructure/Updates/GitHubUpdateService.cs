@@ -17,6 +17,7 @@ public sealed class GitHubUpdateService(
 
     public async Task<AppUpdateInfo> CheckAsync(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         using var request = new HttpRequestMessage(
             HttpMethod.Get,
             $"https://api.github.com/repos/{owner}/{repository}/releases/latest");
@@ -63,6 +64,8 @@ public sealed class GitHubUpdateService(
         IProgress<UpdateDownloadProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(update);
+        cancellationToken.ThrowIfCancellationRequested();
         if (!update.IsUpdateAvailable)
         {
             throw new InvalidOperationException("当前没有可安装的新版本。");
@@ -92,13 +95,12 @@ public sealed class GitHubUpdateService(
                 && await HasExpectedHashAsync(destinationPath, installer.Sha256, cancellationToken).ConfigureAwait(false))
             {
                 progress?.Report(new UpdateDownloadProgress(installer.Size, installer.Size));
+                cancellationToken.ThrowIfCancellationRequested();
                 return destinationPath;
             }
-            File.Delete(destinationPath);
         }
 
-        var temporaryPath = destinationPath + ".download";
-        File.Delete(temporaryPath);
+        var temporaryPath = destinationPath + $".{Guid.NewGuid():N}.download";
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, installer.DownloadUrl);
@@ -110,9 +112,14 @@ public sealed class GitHubUpdateService(
                 .ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
-            if (response.Content.Headers.ContentLength is > MaximumInstallerSize)
+            if (!IsTrustedDownloadUrl(response.RequestMessage?.RequestUri?.AbsoluteUri ?? installer.DownloadUrl))
             {
-                throw new InvalidDataException("安装包超过允许的最大大小。");
+                throw new InvalidDataException("安装包重定向到了不受信任的来源。");
+            }
+
+            if (response.Content.Headers.ContentLength is { } contentLength && contentLength != installer.Size)
+            {
+                throw new InvalidDataException("安装包响应大小与 GitHub 元数据不一致。");
             }
 
             await using var source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
@@ -157,13 +164,58 @@ public sealed class GitHubUpdateService(
                 throw new InvalidDataException("安装包 SHA256 校验失败，文件已删除。");
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             File.Move(temporaryPath, destinationPath, overwrite: true);
             progress?.Report(new UpdateDownloadProgress(installer.Size, installer.Size));
             return destinationPath;
         }
         catch
         {
-            File.Delete(temporaryPath);
+            try
+            {
+                File.Delete(temporaryPath);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // Preserve the download/verification error if cleanup is blocked by another process.
+            }
+            throw;
+        }
+    }
+
+    public async Task<IDisposable> AcquireVerifiedInstallerAsync(
+        AppUpdateInfo update,
+        string installerPath,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(update);
+        cancellationToken.ThrowIfCancellationRequested();
+        var installer = update.Installer
+            ?? throw new InvalidOperationException("新版本未提供可验证的 Windows x64 安装包。");
+        ValidateInstallerPackage(installer);
+        var expectedName = $"ADB-Mirror-Studio-Setup-{NormalizeDisplayVersion(update.LatestVersion)}-win-x64.exe";
+        if (!update.IsUpdateAvailable
+            || !installer.FileName.Equals(expectedName, StringComparison.OrdinalIgnoreCase)
+            || !Path.GetFileName(installerPath).Equals(installer.FileName, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("待启动安装包与目标版本不一致。");
+        }
+
+        var stream = new FileStream(installerPath, FileMode.Open, FileAccess.Read, FileShare.Read,
+            128 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        try
+        {
+            if (stream.Length != installer.Size
+                || !await HasExpectedHashAsync(stream, installer.Sha256, cancellationToken).ConfigureAwait(false))
+            {
+                throw new InvalidDataException("安装包启动前校验失败，请重新下载。");
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+            return stream;
+        }
+        catch
+        {
+            await stream.DisposeAsync().ConfigureAwait(false);
             throw;
         }
     }
@@ -198,6 +250,8 @@ public sealed class GitHubUpdateService(
     private static bool IsTrustedDownloadUrl(string value) =>
         Uri.TryCreate(value, UriKind.Absolute, out var uri)
         && uri.Scheme == Uri.UriSchemeHttps
+        && uri.IsDefaultPort
+        && string.IsNullOrEmpty(uri.UserInfo)
         && (uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase)
             || uri.Host.EndsWith(".githubusercontent.com", StringComparison.OrdinalIgnoreCase));
 
@@ -227,15 +281,24 @@ public sealed class GitHubUpdateService(
             FileShare.Read,
             128 * 1024,
             FileOptions.Asynchronous | FileOptions.SequentialScan);
+        return await HasExpectedHashAsync(stream, expectedSha256, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task<bool> HasExpectedHashAsync(
+        Stream stream,
+        string expectedSha256,
+        CancellationToken cancellationToken)
+    {
+        if (!TryNormalizeSha256(expectedSha256, out var normalizedHash)) return false;
         var hash = await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false);
-        return Convert.ToHexString(hash).Equals(expectedSha256, StringComparison.OrdinalIgnoreCase);
+        return Convert.ToHexString(hash).Equals(normalizedHash, StringComparison.OrdinalIgnoreCase);
     }
 
     private static Version ParseVersion(string value)
     {
         var normalized = value.Trim().TrimStart('v', 'V').Split(['+', '-'], 2)[0];
         return Version.TryParse(normalized, out var version)
-            ? version
+            ? new Version(version.Major, version.Minor, Math.Max(0, version.Build), Math.Max(0, version.Revision))
             : throw new FormatException($"无法识别版本号：{value}");
     }
 

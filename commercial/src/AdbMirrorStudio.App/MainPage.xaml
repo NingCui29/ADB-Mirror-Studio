@@ -523,7 +523,7 @@
                                             <TextBlock Text="安装 Android 应用" FontSize="17" FontWeight="SemiBold" />
                                             <TextBlock Text="使用 adb install -r 覆盖安装并保留已有应用数据" Opacity="0.62" />
                                         </StackPanel>
-                                        <TextBox Header="APK 文件" Text="{Binding TransferFilePath}" IsReadOnly="True"
+                                        <TextBox Header="APK 文件" Text="{Binding ApkFilePath}" IsReadOnly="True"
                                                  PlaceholderText="请选择 .apk 文件" />
                                         <StackPanel Orientation="Horizontal" Spacing="10">
                                             <Button Content="选择 APK" Click="ChooseApk_Click" IsEnabled="{Binding IsIdle}" />

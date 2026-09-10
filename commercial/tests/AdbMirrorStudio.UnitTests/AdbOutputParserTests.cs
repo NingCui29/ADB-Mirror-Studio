@@ -45,6 +45,14 @@ public sealed class AdbOutputParserTests
     }
 
     [Fact]
+    public void ParseDevices_RecognizesAutoConnectedWirelessTransport()
+    {
+        const string output = "List of devices attached\nadb-serial-random._adb-tls-connect._tcp device model:Pixel_9 transport_id:1";
+
+        Assert.Equal(ConnectionKind.TcpIp, AdbOutputParser.ParseDevices(output).Single().ConnectionKind);
+    }
+
+    [Fact]
     public void ParseMdnsServices_OnlyReturnsAdbTlsServices()
     {
         const string output = """
