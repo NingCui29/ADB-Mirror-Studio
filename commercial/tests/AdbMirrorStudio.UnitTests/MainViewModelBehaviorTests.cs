@@ -275,6 +275,46 @@ public sealed class MainViewModelBehaviorTests
         Assert.Equal(InfoBarSeverity.Error, model.StatusSeverity);
     }
 
+    [Fact]
+    public async Task TcpIpTargetLabelDoesNotRepeatSerial()
+    {
+        const string serial = "10.67.116.12:5555";
+        var adb = new FakeAdb
+        {
+            Devices = [new(serial, "mt", "product", DeviceState.Online, ConnectionKind.TcpIp, DateTimeOffset.UtcNow)]
+        };
+        using var model = Create(adb);
+
+        await model.RefreshAsync();
+
+        Assert.Equal($"mt {serial}", model.SelectedDeviceLabel);
+    }
+
+    [Fact]
+    public async Task MirrorActionsTrackSelectedDeviceSessionState()
+    {
+        var mirror = new FakeMirror();
+        var adb = new FakeAdb { Devices = [Device("device")] };
+        using var model = Create(adb, mirror);
+        await model.RefreshAsync();
+        Assert.True(model.CanStartSelectedMirror);
+        Assert.False(model.CanStopSelectedMirror);
+
+        var running = new MirrorSession("session", "device", MirrorSessionState.Running, 123, DateTimeOffset.UtcNow);
+        mirror.ActiveSessions = [running];
+        mirror.Emit(running);
+
+        Assert.False(model.CanStartSelectedMirror);
+        Assert.True(model.CanStopSelectedMirror);
+        Assert.False(model.CanArrangeMirrorWindows);
+
+        mirror.ActiveSessions = [];
+        mirror.Emit(running with { State = MirrorSessionState.Exited });
+
+        Assert.True(model.CanStartSelectedMirror);
+        Assert.False(model.CanStopSelectedMirror);
+    }
+
     private static DeviceInfo Device(string serial) => new(serial, "model", "product", DeviceState.Online, ConnectionKind.Usb, DateTimeOffset.UtcNow);
 
     private static MainViewModel Create(FakeAdb adb, FakeMirror? mirror = null, FakeUpdates? updates = null)

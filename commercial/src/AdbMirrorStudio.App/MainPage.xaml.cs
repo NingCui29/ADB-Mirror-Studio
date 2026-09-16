@@ -23,6 +23,41 @@ public sealed partial class MainPage : Page
         _autoRefreshTimer.Tick += AutoRefreshTimer_Tick;
     }
 
+    private void WorkspaceTabs_Loaded(object sender, RoutedEventArgs e) =>
+        UpdateWorkspaceContentWidth(WorkspaceTabs.ActualWidth);
+
+    private void WorkspaceTabs_SizeChanged(object sender, SizeChangedEventArgs e) =>
+        UpdateWorkspaceContentWidth(e.NewSize.Width);
+
+    private void UpdateWorkspaceContentWidth(double availableWidth)
+    {
+        if (OverviewScrollViewer is null) return;
+        var contentWidth = Math.Max(0, Math.Min(1400, availableWidth));
+        foreach (var scrollViewer in new[]
+                 {
+                     OverviewScrollViewer,
+                     ScreenScrollViewer,
+                     FilesScrollViewer,
+                     AppsScrollViewer,
+                     TerminalScrollViewer
+                 })
+        {
+            scrollViewer.Width = contentWidth;
+        }
+
+        foreach (var content in new FrameworkElement[]
+                 {
+                     OverviewCards,
+                     ScreenCards,
+                     FilesCards,
+                     AppsCards,
+                     TerminalContent
+                 })
+        {
+            content.Width = contentWidth;
+        }
+    }
+
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
@@ -200,17 +235,15 @@ public sealed partial class MainPage : Page
 
     private async void Navigation_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
-        DeviceCenterView.Visibility = Visibility.Collapsed;
-        SessionsView.Visibility = Visibility.Collapsed;
-        FilesView.Visibility = Visibility.Collapsed;
-        ToolsView.Visibility = Visibility.Collapsed;
+        WorkspaceView.Visibility = Visibility.Collapsed;
+        TasksView.Visibility = Visibility.Collapsed;
         SettingsView.Visibility = Visibility.Collapsed;
 
         if (args.IsSettingsSelected)
         {
             SettingsView.Visibility = Visibility.Visible;
-            SettingsTabs?.Focus(FocusState.Programmatic);
-            if (SettingsTabs?.SelectedIndex == 1 && ViewModel is not null && ViewModel.Diagnostics.Count == 0)
+            ThemeSelector?.Focus(FocusState.Programmatic);
+            if (ViewModel is not null && ViewModel.Diagnostics.Count == 0)
             {
                 await ViewModel.RunDiagnosticsAsync();
             }
@@ -220,20 +253,11 @@ public sealed partial class MainPage : Page
         var tag = (args.SelectedItemContainer as NavigationViewItem)?.Tag as string;
         switch (tag)
         {
-            case "sessions":
-                SessionsView.Visibility = Visibility.Visible;
-                MirrorProfileSelector?.Focus(FocusState.Programmatic);
-                break;
-            case "files":
-                FilesView.Visibility = Visibility.Visible;
-                TransferDeviceSelector?.Focus(FocusState.Programmatic);
-                break;
-            case "tools":
-                ToolsView.Visibility = Visibility.Visible;
-                ToolsDeviceSelector?.Focus(FocusState.Programmatic);
+            case "tasks":
+                TasksView.Visibility = Visibility.Visible;
                 break;
             default:
-                DeviceCenterView.Visibility = Visibility.Visible;
+                WorkspaceView.Visibility = Visibility.Visible;
                 RefreshDevicesButton?.Focus(FocusState.Programmatic);
                 break;
         }
@@ -241,34 +265,23 @@ public sealed partial class MainPage : Page
 
     private void OpenDevices_Click(object sender, RoutedEventArgs e)
     {
-        Navigation.SelectedItem = DevicesNavigationItem;
-        DeviceCenterView.Visibility = Visibility.Visible;
-        SessionsView.Visibility = Visibility.Collapsed;
-        FilesView.Visibility = Visibility.Collapsed;
-        ToolsView.Visibility = Visibility.Collapsed;
+        Navigation.SelectedItem = WorkspaceNavigationItem;
+        WorkspaceView.Visibility = Visibility.Visible;
+        TasksView.Visibility = Visibility.Collapsed;
         SettingsView.Visibility = Visibility.Collapsed;
         RefreshDevicesButton?.Focus(FocusState.Programmatic);
     }
 
+    private void OpenFilesTab_Click(object sender, RoutedEventArgs e) => WorkspaceTabs.SelectedIndex = 2;
+
     private async void OpenDiagnostics_Click(object sender, RoutedEventArgs e)
     {
         Navigation.SelectedItem = Navigation.SettingsItem;
-        DeviceCenterView.Visibility = Visibility.Collapsed;
-        SessionsView.Visibility = Visibility.Collapsed;
-        FilesView.Visibility = Visibility.Collapsed;
-        ToolsView.Visibility = Visibility.Collapsed;
+        WorkspaceView.Visibility = Visibility.Collapsed;
+        TasksView.Visibility = Visibility.Collapsed;
         SettingsView.Visibility = Visibility.Visible;
-        SettingsTabs.SelectedIndex = 1;
-        SettingsTabs?.Focus(FocusState.Programmatic);
+        ThemeSelector?.Focus(FocusState.Programmatic);
         if (ViewModel is not null && ViewModel.Diagnostics.Count == 0)
-        {
-            await ViewModel.RunDiagnosticsAsync();
-        }
-    }
-
-    private async void SettingsTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (ViewModel is not null && SettingsTabs.SelectedIndex == 1 && ViewModel.Diagnostics.Count == 0)
         {
             await ViewModel.RunDiagnosticsAsync();
         }

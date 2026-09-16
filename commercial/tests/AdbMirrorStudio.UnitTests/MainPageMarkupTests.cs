@@ -8,7 +8,7 @@ public sealed class MainPageMarkupTests
     private static readonly XNamespace Xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
 
     [Fact]
-    public void PrimaryNavigationContainsOnlyFourTaskEntrances()
+    public void PrimaryNavigationSeparatesDeviceWorkspaceAndCrossDeviceTasks()
     {
         var navigation = Markup.Descendants(Ui + "NavigationView").Single();
         var menuItems = navigation.Element(Ui + "NavigationView.MenuItems")!
@@ -16,57 +16,66 @@ public sealed class MainPageMarkupTests
             .Select(item => item.Attribute("Content")?.Value ?? throw new InvalidDataException("导航项缺少 Content。"))
             .ToArray();
 
-        Assert.Equal(["设备", "镜像与录制", "文件传输", "设备工具"], menuItems);
+        Assert.Equal(["设备工作区", "任务中心"], menuItems);
     }
 
     [Fact]
-    public void FileTransferOwnsUploadDownloadAndApkSections()
+    public void DeviceWorkspaceContainsFiveDeviceScopedAreas()
     {
-        var files = ElementNamed("FilesView");
-        var headers = files.Descendants(Ui + "TabViewItem")
-            .Select(item => item.Attribute("Header")?.Value ?? throw new InvalidDataException("文件分区缺少 Header。"))
+        var headers = ElementNamed("WorkspaceTabs").Elements(Ui + "TabViewItem")
+            .Select(item => item.Attribute("Header")?.Value ?? throw new InvalidDataException("工作区缺少 Header。"))
             .ToArray();
 
-        Assert.Equal(["上传文件", "从设备下载", "安装 APK"], headers);
-        Assert.DoesNotContain(
-            ElementNamed("ToolsView").Descendants().Attributes("Text"),
-            attribute => attribute.Value == "从设备下载");
+        Assert.Equal(["概览", "屏幕", "文件", "应用", "终端"], headers);
     }
 
     [Fact]
-    public void FileTransferDeclaresUploadDownloadAndApkCommands()
+    public void FilesAndAppsOwnTheirRespectiveCommands()
     {
-        var clickHandlers = ElementNamed("FilesView").Descendants()
+        var fileHandlers = WorkspaceArea("文件").Descendants()
+            .Select(element => (string?)element.Attribute("Click"))
+            .Where(value => value is not null)
+            .ToHashSet(StringComparer.Ordinal);
+        var appHandlers = WorkspaceArea("应用").Descendants()
             .Select(element => (string?)element.Attribute("Click"))
             .Where(value => value is not null)
             .ToHashSet(StringComparer.Ordinal);
 
-        Assert.Contains("ChooseFile_Click", clickHandlers);
-        Assert.Contains("PushFile_Click", clickHandlers);
-        Assert.Contains("ChooseDownloadDirectory_Click", clickHandlers);
-        Assert.Contains("PullRemoteFile_Click", clickHandlers);
-        Assert.Contains("ChooseApk_Click", clickHandlers);
-        Assert.Contains("InstallApk_Click", clickHandlers);
+        Assert.Contains("ChooseFile_Click", fileHandlers);
+        Assert.Contains("PushFile_Click", fileHandlers);
+        Assert.Contains("ChooseDownloadDirectory_Click", fileHandlers);
+        Assert.Contains("PullRemoteFile_Click", fileHandlers);
+        Assert.DoesNotContain("ChooseApk_Click", fileHandlers);
+        Assert.Contains("ChooseApk_Click", appHandlers);
+        Assert.Contains("InstallApk_Click", appHandlers);
+        Assert.Contains("AppAction_Click", appHandlers);
     }
 
     [Fact]
-    public void TransferAndToolsUseSameSelectedDeviceBinding()
+    public void DeviceRailProvidesSingleSharedTargetSelection()
     {
-        foreach (var selectorName in new[] { "TransferDeviceSelector", "ToolsDeviceSelector" })
-        {
-            var selector = ElementNamed(selectorName);
-            Assert.Contains("SelectedDeviceSerial", (string?)selector.Attribute("SelectedValue"));
-        }
+        var selector = ElementNamed("DeviceRail").Descendants(Ui + "ListView").Single();
+
+        Assert.Equal("Serial", (string?)selector.Attribute("SelectedValuePath"));
+        Assert.Contains("SelectedDeviceSerial", (string?)selector.Attribute("SelectedValue"));
+        Assert.DoesNotContain(Markup.Descendants(), element =>
+            (string?)element.Attribute(Xaml + "Name") is "TransferDeviceSelector" or "ToolsDeviceSelector");
     }
 
     [Fact]
-    public void SettingsOwnsDiagnosticsUpdatesDataAndAbout()
+    public void SettingsOwnsOnlyAppScopedSections()
     {
-        var headers = ElementNamed("SettingsView").Descendants(Ui + "TabViewItem")
-            .Select(item => item.Attribute("Header")?.Value ?? throw new InvalidDataException("设置分区缺少 Header。"))
-            .ToArray();
+        var labels = ElementNamed("SettingsView").Descendants(Ui + "TextBlock")
+            .Select(item => (string?)item.Attribute("Text"))
+            .Where(value => value is not null)
+            .ToHashSet(StringComparer.Ordinal);
 
-        Assert.Equal(["外观与常规", "诊断", "更新与数据", "关于与许可"], headers);
+        Assert.Contains("外观", labels);
+        Assert.Contains("设备刷新", labels);
+        Assert.Contains("系统健康", labels);
+        Assert.Contains("更新", labels);
+        Assert.Contains("本地数据与关于", labels);
+        Assert.Empty(ElementNamed("SettingsView").Descendants(Ui + "TabViewItem"));
     }
 
     [Fact]
@@ -85,13 +94,14 @@ public sealed class MainPageMarkupTests
     }
 
     [Fact]
-    public void NavigationCodeHasNoRemovedPageBranches()
+    public void NavigationCodeUsesOnlyNewTopLevelScopes()
     {
         var code = File.ReadAllText(FixturePath("MainPage.xaml.cs"));
 
-        Assert.Contains("case \"sessions\"", code, StringComparison.Ordinal);
-        Assert.Contains("case \"files\"", code, StringComparison.Ordinal);
-        Assert.Contains("case \"tools\"", code, StringComparison.Ordinal);
+        Assert.Contains("case \"tasks\"", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("case \"sessions\"", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("case \"files\"", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("case \"tools\"", code, StringComparison.Ordinal);
         Assert.DoesNotContain("case \"diagnostics\"", code, StringComparison.Ordinal);
         Assert.DoesNotContain("case \"about\"", code, StringComparison.Ordinal);
     }
@@ -108,7 +118,7 @@ public sealed class MainPageMarkupTests
             .ToArray();
 
         Assert.Equal(
-            ["{Binding DisplayName}", "{Binding ConnectionLabel}", "{Binding StateLabel}"],
+            ["{Binding DisplayName}", "{Binding StateLabel}", "{Binding ConnectionLabel}"],
             bindings);
     }
 
@@ -130,23 +140,51 @@ public sealed class MainPageMarkupTests
     }
 
     [Fact]
-    public void DeviceCardAlignsActionsRightAndReflowsAtNarrowWidths()
+    public void DeviceWorkspaceReflowsRailAboveContentAtNarrowWidths()
     {
-        var actionPanel = ElementNamed("ActionPanel");
         var adaptiveWidths = Markup.Descendants(Ui + "AdaptiveTrigger")
             .Select(trigger => (string?)trigger.Attribute("MinWindowWidth"))
             .Where(width => width is not null)
             .ToHashSet(StringComparer.Ordinal);
 
-        Assert.Equal("2", (string?)actionPanel.Attribute("Grid.Column"));
-        Assert.Equal("Right", (string?)actionPanel.Attribute("HorizontalAlignment"));
-        Assert.Contains("900", adaptiveWidths);
-        Assert.Contains("600", adaptiveWidths);
+        Assert.Contains("980", adaptiveWidths);
         Assert.Contains("0", adaptiveWidths);
-        Assert.NotNull(ElementNamed("MirrorButton"));
-        Assert.NotNull(ElementNamed("TcpIpButton"));
-        Assert.NotNull(ElementNamed("RebootButton"));
-        Assert.NotNull(ElementNamed("DisconnectButton"));
+        Assert.NotNull(ElementNamed("DeviceRail"));
+        Assert.NotNull(ElementNamed("WorkspaceContent"));
+        Assert.Contains(Markup.Descendants(Ui + "Setter"), setter =>
+            (string?)setter.Attribute("Target") == "WorkspaceContent.(Grid.Row)"
+            && (string?)setter.Attribute("Value") == "1");
+    }
+
+    [Fact]
+    public void DeviceWorkspaceUsesTwoColumnCardsAtFullScreenWidths()
+    {
+        var adaptiveWidths = Markup.Descendants(Ui + "AdaptiveTrigger")
+            .Select(trigger => (string?)trigger.Attribute("MinWindowWidth"))
+            .Where(width => width is not null)
+            .ToHashSet(StringComparer.Ordinal);
+        var responsiveCardNames = new[] { "OverviewCards", "ScreenCards", "FilesCards", "AppsCards" };
+
+        Assert.Contains("1500", adaptiveWidths);
+        foreach (var cardName in responsiveCardNames)
+        {
+            var cards = ElementNamed(cardName);
+            Assert.Equal("1400", (string?)cards.Attribute("MaxWidth"));
+            Assert.Equal("Stretch", (string?)cards.Attribute("HorizontalAlignment"));
+        }
+
+        Assert.Contains(Markup.Descendants(Ui + "Setter"), setter =>
+            (string?)setter.Attribute("Target") == "OverviewConnectionCard.(Grid.Column)"
+            && (string?)setter.Attribute("Value") == "1");
+        Assert.Contains(Markup.Descendants(Ui + "Setter"), setter =>
+            (string?)setter.Attribute("Target") == "ScreenControlCard.(Grid.Column)"
+            && (string?)setter.Attribute("Value") == "1");
+
+        var tabs = ElementNamed("WorkspaceTabs");
+        Assert.Equal("WorkspaceTabs_SizeChanged", (string?)tabs.Attribute("SizeChanged"));
+        var pageCode = File.ReadAllText(FixturePath("MainPage.xaml.cs"));
+        Assert.Contains("Math.Min(1400, availableWidth)", pageCode, StringComparison.Ordinal);
+        Assert.Contains("scrollViewer.Width = contentWidth;", pageCode, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -165,21 +203,23 @@ public sealed class MainPageMarkupTests
     }
 
     [Fact]
-    public void ConnectionMethodsAreSideBySideWithoutNestedPairingExpander()
+    public void AddDeviceFlyoutContainsAddressConnectionAndWirelessPairing()
     {
-        var methods = ElementNamed("ConnectionMethodsGrid");
-        var pairingCard = ElementNamed("PairingCard");
-        var adaptiveWidths = methods.Descendants(Ui + "AdaptiveTrigger")
-            .Select(trigger => (string?)trigger.Attribute("MinWindowWidth"))
-            .ToArray();
+        var addDeviceButton = ElementNamed("DeviceRail").Descendants(Ui + "Button")
+            .Single(button => (string?)button.Attribute("Content") == "添加设备");
+        var flyout = addDeviceButton.Descendants(Ui + "Flyout").Single();
+        var labels = flyout.Descendants(Ui + "TextBlock")
+            .Select(element => (string?)element.Attribute("Text"))
+            .Where(value => value is not null)
+            .ToHashSet(StringComparer.Ordinal);
 
-        Assert.Equal("1", (string?)pairingCard.Attribute("Grid.Column"));
-        Assert.Empty(methods.Descendants(Ui + "Expander"));
-        Assert.Contains("480", adaptiveWidths);
-        Assert.Contains("0", adaptiveWidths);
+        Assert.Contains("地址连接", labels);
+        Assert.Contains("无线配对", labels);
+        Assert.NotNull(ElementNamed("EndpointBox"));
+        Assert.NotNull(ElementNamed("PairingCodeBox"));
         Assert.Contains(
-            methods.Descendants(Ui + "Button"),
-            button => (string?)button.Attribute("Content") == "配对设备"
+            flyout.Descendants(Ui + "Button"),
+            button => (string?)button.Attribute("Content") == "配对"
                       && (string?)button.Attribute("Click") == "Pair_Click");
     }
 
@@ -197,6 +237,10 @@ public sealed class MainPageMarkupTests
 
     private static XElement ElementNamed(string name) => Markup.Descendants()
         .Single(element => (string?)element.Attribute(Xaml + "Name") == name);
+
+    private static XElement WorkspaceArea(string header) => ElementNamed("WorkspaceTabs")
+        .Elements(Ui + "TabViewItem")
+        .Single(element => (string?)element.Attribute("Header") == header);
 
     private static string FixturePath(string fileName) =>
         Path.Combine(AppContext.BaseDirectory, "Fixtures", fileName);

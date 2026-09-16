@@ -46,6 +46,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private long _appsRequestVersion;
     private long _statusVersion;
     private string _statusText = "正在初始化设备服务…";
+    private bool _isStatusOpen = true;
     private string _endpoint = "192.168.1.100:5555";
     private string _pairEndpoint = string.Empty;
     private string _pairingCode = string.Empty;
@@ -102,6 +103,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             {
                 OnPropertyChanged(nameof(IsIdle));
                 OnPropertyChanged(nameof(CanDownloadAndInstallUpdate));
+                OnPropertyChanged(nameof(CanUseSelectedDevice));
+                OnPropertyChanged(nameof(CanStartSelectedMirror));
+                OnPropertyChanged(nameof(CanStopSelectedMirror));
+                OnPropertyChanged(nameof(CanInstallApk));
+                OnPropertyChanged(nameof(CanPushFiles));
+                OnPropertyChanged(nameof(CanRunSelectedAppAction));
+                OnPropertyChanged(nameof(CanArrangeMirrorWindows));
             }
         }
     }
@@ -116,9 +124,16 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             if (SetField(ref _statusText, value))
             {
                 _statusVersion++;
+                IsStatusOpen = true;
                 OnPropertyChanged(nameof(StatusSeverity));
             }
         }
+    }
+
+    public bool IsStatusOpen
+    {
+        get => _isStatusOpen;
+        set => SetField(ref _isStatusOpen, value);
     }
 
     public InfoBarSeverity StatusSeverity => GetStatusSeverity(StatusText);
@@ -148,13 +163,18 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             if (IsTransferRunning || !SetField(ref _transferFilePath, value)) return;
             if (!_settingTransferFiles) TransferQueue.Clear();
+            OnPropertyChanged(nameof(CanPushFiles));
+            OnPropertyChanged(nameof(HasNoTransferTasks));
         }
     }
 
     public string ApkFilePath
     {
         get => _apkFilePath;
-        set => SetField(ref _apkFilePath, value);
+        set
+        {
+            if (SetField(ref _apkFilePath, value)) OnPropertyChanged(nameof(CanInstallApk));
+        }
     }
 
     public string SelectedMirrorProfileId
@@ -176,6 +196,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public string OnlineSummary => $"{Devices.Count(device => device.State == DeviceState.Online)} 台在线";
     public bool HasNoSessions => Sessions.Count == 0;
+    public bool HasNoTransferTasks => TransferQueue.Count == 0;
+    public bool HasNoRecordings => Recordings.Count == 0;
     public string Theme => _settings.Theme;
     public bool AutoRefresh => _settings.AutoRefresh;
     public bool HasRememberedEndpoints => RememberedEndpoints.Count > 0;
@@ -241,13 +263,35 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             InstalledApps.Clear();
             SelectedAppPackage = null;
             OnPropertyChanged(nameof(SelectedDeviceLabel));
+            OnPropertyChanged(nameof(HasSelectedDevice));
+            OnPropertyChanged(nameof(CanUseSelectedDevice));
+            OnPropertyChanged(nameof(CanStartSelectedMirror));
+            OnPropertyChanged(nameof(CanStopSelectedMirror));
+            OnPropertyChanged(nameof(CanInstallApk));
+            OnPropertyChanged(nameof(CanPushFiles));
+            OnPropertyChanged(nameof(CanRunSelectedAppAction));
         }
     }
     public string SelectedDeviceLabel => GetDeviceLabel(SelectedDeviceSerial);
+    public bool HasSelectedDevice => !string.IsNullOrWhiteSpace(SelectedDeviceSerial);
+    public bool SelectedDeviceIsMirroring => Devices.FirstOrDefault(device =>
+        string.Equals(device.Serial, SelectedDeviceSerial, StringComparison.Ordinal))?.IsMirroring == true;
+    public bool CanUseSelectedDevice => IsIdle && HasSelectedDevice;
+    public bool CanStartSelectedMirror => CanUseSelectedDevice && !SelectedDeviceIsMirroring;
+    public bool CanStopSelectedMirror => CanUseSelectedDevice && SelectedDeviceIsMirroring;
+    public bool CanInstallApk => CanUseSelectedDevice && File.Exists(ApkFilePath);
+    public bool CanPushFiles => CanUseSelectedDevice
+        && (TransferQueue.Count > 0 || File.Exists(TransferFilePath));
+    public bool CanRunSelectedAppAction => CanUseSelectedDevice
+        && !string.IsNullOrWhiteSpace(SelectedAppPackage);
+    public bool CanArrangeMirrorWindows => IsIdle && Sessions.Count > 1;
     public string? SelectedAppPackage
     {
         get => _selectedAppPackage;
-        set => SetField(ref _selectedAppPackage, value);
+        set
+        {
+            if (SetField(ref _selectedAppPackage, value)) OnPropertyChanged(nameof(CanRunSelectedAppAction));
+        }
     }
     public string PackageNameInput
     {
@@ -275,8 +319,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (string.IsNullOrWhiteSpace(serial)) return "未选择设备";
         var displayName = Devices.FirstOrDefault(device =>
             string.Equals(device.Serial, serial, StringComparison.Ordinal))?.DisplayName;
-        return string.IsNullOrWhiteSpace(displayName) || string.Equals(displayName, serial, StringComparison.Ordinal)
-            ? serial
+        if (string.IsNullOrWhiteSpace(displayName) || string.Equals(displayName, serial, StringComparison.Ordinal))
+        {
+            return serial;
+        }
+
+        return displayName.Contains(serial, StringComparison.Ordinal)
+            ? displayName
             : $"{displayName}（{serial}）";
     }
 
@@ -433,6 +482,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _settingTransferFiles = true;
         try { TransferFilePath = files.FirstOrDefault() ?? string.Empty; }
         finally { _settingTransferFiles = false; }
+        OnPropertyChanged(nameof(CanPushFiles));
+        OnPropertyChanged(nameof(HasNoTransferTasks));
         StatusText = files.Length == 0 ? "未选择有效文件" : $"已加入 {files.Length} 个文件";
     }
 
@@ -701,6 +752,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 Sessions.Add(new MirrorSessionCardViewModel(session, displayName));
             }
             OnPropertyChanged(nameof(HasNoSessions));
+            OnPropertyChanged(nameof(CanArrangeMirrorWindows));
+            OnPropertyChanged(nameof(SelectedDeviceIsMirroring));
+            OnPropertyChanged(nameof(CanStartSelectedMirror));
+            OnPropertyChanged(nameof(CanStopSelectedMirror));
 
             foreach (var recordingSession in activeSessions.Where(session => !string.IsNullOrWhiteSpace(session.RecordPath)))
             {
@@ -714,12 +769,20 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                     existing.Update(recordingSession);
                 }
             }
+            OnPropertyChanged(nameof(HasNoRecordings));
 
             var resolvedDevice = DeviceTargetSelection.Resolve(selectedDevice, snapshot.Devices, _allowAutomaticDeviceSelection);
             var targetLost = selectedDevice is not null && resolvedDevice is null;
             SelectedDeviceSerial = resolvedDevice;
             OnPropertyChanged(nameof(SelectedDeviceSerial));
             OnPropertyChanged(nameof(SelectedDeviceLabel));
+            OnPropertyChanged(nameof(HasSelectedDevice));
+            OnPropertyChanged(nameof(CanUseSelectedDevice));
+            OnPropertyChanged(nameof(CanStartSelectedMirror));
+            OnPropertyChanged(nameof(CanStopSelectedMirror));
+            OnPropertyChanged(nameof(CanInstallApk));
+            OnPropertyChanged(nameof(CanPushFiles));
+            OnPropertyChanged(nameof(CanRunSelectedAppAction));
 
             if (targetLost)
                 StatusText = "当前目标设备已离线，请重新选择设备";
@@ -1460,6 +1523,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 if (existing is not null) Sessions.Remove(existing);
                 if (isActiveState) Sessions.Add(new MirrorSessionCardViewModel(session, card?.DisplayName));
                 OnPropertyChanged(nameof(HasNoSessions));
+                OnPropertyChanged(nameof(CanArrangeMirrorWindows));
+                OnPropertyChanged(nameof(SelectedDeviceIsMirroring));
+                OnPropertyChanged(nameof(CanStartSelectedMirror));
+                OnPropertyChanged(nameof(CanStopSelectedMirror));
             }
             if (!string.IsNullOrWhiteSpace(session.RecordPath))
             {
@@ -1473,6 +1540,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 {
                     recording.Update(session);
                 }
+                OnPropertyChanged(nameof(HasNoRecordings));
             }
             if (session.State == MirrorSessionState.Failed && !isStaleTerminalEvent)
             {
