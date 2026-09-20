@@ -8,17 +8,17 @@
 
 ## 下载
 
-当前版本：`V1.5.0`
+当前版本：`V1.6.0`
 
-- [GitHub Release](https://github.com/NingCui29/ADB-Mirror-Studio/releases/tag/V1.5.0)
-- [下载安装版（推荐）](https://github.com/NingCui29/ADB-Mirror-Studio/releases/download/V1.5.0/ADB-Mirror-Studio-Setup-V1.5.0-win-x64.exe)
-- [下载便携版](https://github.com/NingCui29/ADB-Mirror-Studio/releases/download/V1.5.0/AdbMirrorStudio-V1.5.0-win-x64.zip)
+- [GitHub Release](https://github.com/NingCui29/ADB-Mirror-Studio/releases/tag/V1.6.0)
+- [下载安装版（推荐）](https://github.com/NingCui29/ADB-Mirror-Studio/releases/download/V1.6.0/ADB-Mirror-Studio-Setup-V1.6.0-win-x64.exe)
+- [下载便携版](https://github.com/NingCui29/ADB-Mirror-Studio/releases/download/V1.6.0/AdbMirrorStudio-V1.6.0-win-x64.zip)
 
 SHA256：
 
 ```text
-安装版  CB1C0CB9B72074B9099C55A279561EF9E691580EE52E43F03BEA381CACADC3E8
-便携版  CD1B90D68796EC97E7B4E7C59CF359FE6B405A1DCD513B42C3B9AB9A349481B5
+安装版  218E68313851E5F67BE7B38839D1D748FA7D4E0C2D798158A1EAE51AA139D49E
+便携版  C4110026CAED1A0808295039C6DF1C181CE37CF8F23A6B4C306748129D5514E6
 ```
 
 ## 主要功能
@@ -39,6 +39,7 @@ SHA256：
 - 多选、拖放、逐项状态和可取消的文件上传队列
 - 从设备下载文件或目录
 - 设备详情、电池、存储、截图和 Logcat 导出
+- 当前设备整机 CPU/GPU 实时占用、最近 30 秒平均占用和 CPU/GPU 温度
 - 返回、主页、最近任务、电源和音量快捷控制
 - 用户应用读取、启动、强制停止和确认卸载
 - 无需读取应用列表，直接按 Android 包名确认卸载
@@ -61,7 +62,7 @@ SHA256：
 
 ### 安装版
 
-1. 下载 `ADB-Mirror-Studio-Setup-V1.5.0-win-x64.exe`。
+1. 下载 `ADB-Mirror-Studio-Setup-V1.6.0-win-x64.exe`。
 2. 核对上方 SHA256 后运行安装程序。
 3. 从开始菜单打开 ADB Mirror Studio。
 
@@ -69,7 +70,7 @@ SHA256：
 
 ### 便携版
 
-1. 下载 `AdbMirrorStudio-V1.5.0-win-x64.zip`。
+1. 下载 `AdbMirrorStudio-V1.6.0-win-x64.zip`。
 2. 完整解压 ZIP，不要直接在压缩包中运行。
 3. 双击 `AdbMirrorStudio.App.exe`。
 
@@ -159,6 +160,9 @@ SHA256：
 ## 文档
 
 - [完整使用、开发和发布手册](commercial/README.md)
+- [V1.6.0 发行说明](commercial/RELEASE-NOTES-V1.6.0.md)
+- [V1.6.0 真机验收](commercial/DEVICE-QA-V1.6.0.md)
+- [设备性能监测说明](docs/device-performance-monitoring.md)
 - [V1.5.0 发行说明](commercial/RELEASE-NOTES-V1.5.0.md)
 - [V1.5.0 真机验收](commercial/DEVICE-QA-V1.5.0.md)
 - [V1.5 UI 信息架构](docs/ui-information-architecture-v1.5.md)

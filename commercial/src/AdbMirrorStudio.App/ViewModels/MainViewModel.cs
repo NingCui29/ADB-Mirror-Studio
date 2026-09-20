@@ -34,6 +34,16 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private CancellationTokenSource? _transferCancellation;
     private CancellationTokenSource? _updateDownloadCancellation;
     private CancellationTokenSource? _shellCommandCancellation;
+    private CancellationTokenSource? _performanceCancellation;
+    private DevicePerformanceWindow _performanceWindow = new(TimeSpan.FromSeconds(30));
+    private int _performanceGeneration;
+    private string _cpuUsageText = "—";
+    private string _cpuAverageText = "—";
+    private string _cpuTemperatureText = "—";
+    private string _gpuUsageText = "—";
+    private string _gpuAverageText = "—";
+    private string _gpuTemperatureText = "—";
+    private string _performanceHint = "选择在线设备后开始采样";
     private int _busyCount;
     private int _transferRunning;
     private bool _disposed;
@@ -260,6 +270,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             if (!SetField(ref _selectedDeviceSerial, value)) return;
             _allowAutomaticDeviceSelection = false;
             _appsRequestVersion++;
+            ResetPerformance();
             InstalledApps.Clear();
             SelectedAppPackage = null;
             OnPropertyChanged(nameof(SelectedDeviceLabel));
@@ -273,6 +284,83 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
     public string SelectedDeviceLabel => GetDeviceLabel(SelectedDeviceSerial);
+    public string CpuUsageText { get => _cpuUsageText; private set => SetField(ref _cpuUsageText, value); }
+    public string CpuAverageText { get => _cpuAverageText; private set => SetField(ref _cpuAverageText, value); }
+    public string CpuTemperatureText { get => _cpuTemperatureText; private set => SetField(ref _cpuTemperatureText, value); }
+    public string GpuUsageText { get => _gpuUsageText; private set => SetField(ref _gpuUsageText, value); }
+    public string GpuAverageText { get => _gpuAverageText; private set => SetField(ref _gpuAverageText, value); }
+    public string GpuTemperatureText { get => _gpuTemperatureText; private set => SetField(ref _gpuTemperatureText, value); }
+    public string PerformanceHint { get => _performanceHint; private set => SetField(ref _performanceHint, value); }
+
+    public async Task RefreshPerformanceAsync()
+    {
+        if (_disposed || SelectedDeviceSerial is not { } serial || _performanceCancellation is not null) return;
+        if (Devices.FirstOrDefault(device => device.Serial == serial)?.State != DeviceState.Online) return;
+        var generation = _performanceGeneration;
+        var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_lifetimeToken);
+        _performanceCancellation = cancellation;
+        try
+        {
+            var counters = await _adb.GetPerformanceCountersAsync(serial, cancellation.Token);
+            if (_disposed || cancellation.IsCancellationRequested || generation != _performanceGeneration
+                || !string.Equals(serial, SelectedDeviceSerial, StringComparison.Ordinal)) return;
+            var reading = _performanceWindow.Add(counters, DateTimeOffset.UtcNow);
+            CpuUsageText = FormatPerformancePercent(reading.CpuUsagePercent, "计算中");
+            CpuAverageText = FormatPerformancePercent(reading.CpuAveragePercent, "计算中");
+            CpuTemperatureText = FormatTemperature(counters.CpuTemperatureCelsius, "不可用");
+            GpuUsageText = FormatPerformancePercent(reading.GpuUsagePercent, "不可用");
+            GpuAverageText = FormatPerformancePercent(reading.GpuAveragePercent, "不可用");
+            GpuTemperatureText = FormatTemperature(counters.GpuTemperatureCelsius, "不可用");
+            PerformanceHint = reading.GpuUsagePercent is null
+                ? "整机 CPU · 最近 30 秒采样均值；此设备未提供可读的 GPU 占用节点"
+                : "整机 CPU / GPU · 最近 30 秒有效采样均值 · 约每 2 秒更新";
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception)
+        {
+            if (!_disposed && generation == _performanceGeneration)
+            {
+                _performanceWindow = new DevicePerformanceWindow(TimeSpan.FromSeconds(30));
+                CpuUsageText = "暂不可用";
+                CpuAverageText = "—";
+                CpuTemperatureText = "暂不可用";
+                GpuUsageText = "暂不可用";
+                GpuAverageText = "—";
+                GpuTemperatureText = "暂不可用";
+                PerformanceHint = "设备性能采样失败，下一次刷新将重试";
+            }
+        }
+        finally
+        {
+            if (ReferenceEquals(_performanceCancellation, cancellation)) _performanceCancellation = null;
+            cancellation.Dispose();
+        }
+    }
+
+    private void ResetPerformance()
+    {
+        _performanceGeneration++;
+        var previous = _performanceCancellation;
+        _performanceCancellation = null;
+        previous?.Cancel();
+        _performanceWindow = new DevicePerformanceWindow(TimeSpan.FromSeconds(30));
+        CpuUsageText = "—";
+        CpuAverageText = "—";
+        CpuTemperatureText = "—";
+        GpuUsageText = "—";
+        GpuAverageText = "—";
+        GpuTemperatureText = "—";
+        PerformanceHint = SelectedDeviceSerial is null
+            ? "选择在线设备后开始采样"
+            : Devices.FirstOrDefault(device => device.Serial == SelectedDeviceSerial)?.State == DeviceState.Online
+                ? "正在采集设备性能…"
+                : "当前设备未在线，连接后开始采样";
+    }
+
+    private static string FormatPerformancePercent(double? value, string fallback) =>
+        value is { } percent ? $"{percent:F1}%" : fallback;
+    private static string FormatTemperature(double? value, string fallback) =>
+        value is { } celsius ? $"{celsius:F1} °C" : fallback;
     public bool HasSelectedDevice => !string.IsNullOrWhiteSpace(SelectedDeviceSerial);
     public bool SelectedDeviceIsMirroring => Devices.FirstOrDefault(device =>
         string.Equals(device.Serial, SelectedDeviceSerial, StringComparison.Ordinal))?.IsMirroring == true;
@@ -1496,6 +1584,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _transferCancellation?.Cancel();
         _updateDownloadCancellation?.Cancel();
         _shellCommandCancellation?.Cancel();
+        _performanceCancellation?.Cancel();
         _refreshCoordinator.InvalidatePendingRefreshes();
         _lifetimeCancellation.Cancel();
         _lifetimeCancellation.Dispose();

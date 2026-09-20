@@ -15,6 +15,7 @@ public interface IAdbService
     Task<string> PushFileAsync(string serial, string localPath, string remoteDirectory = "/sdcard/Download/", CancellationToken cancellationToken = default);
     Task<bool> IsOnlineAsync(string serial, CancellationToken cancellationToken = default);
     Task<DeviceDetails> GetDeviceDetailsAsync(string serial, CancellationToken cancellationToken = default);
+    Task<DevicePerformanceCounters> GetPerformanceCountersAsync(string serial, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     Task<string> CaptureScreenshotAsync(string serial, string localPath, CancellationToken cancellationToken = default);
     Task<string> GetLogcatSnapshotAsync(string serial, int maxLines = 500, CancellationToken cancellationToken = default);
     Task<string> PullFileAsync(string serial, string remotePath, string localDirectory, CancellationToken cancellationToken = default);

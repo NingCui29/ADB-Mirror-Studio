@@ -2,7 +2,7 @@
 
 ADB Mirror Studio 是面向 Windows 的 Android 设备连接、屏幕镜像、录屏、文件传输和环境诊断工作台。界面采用 WinUI 3 与 Desktop Acrylic，ADB、scrcpy 和应用运行时均可随便携包分发。所有功能永久免费，无账户、无试用、无订阅、无激活和功能分级。
 
-> 当前版本：`V1.5.0`。个人、组织和企业均可在合法授权的设备上免费使用全部功能。
+> 当前版本：`V1.6.0`。个人、组织和企业均可在合法授权的设备上免费使用全部功能。
 
 ## 系统要求
 
@@ -31,6 +31,7 @@ ADB Mirror Studio 是面向 Windows 的 Android 设备连接、屏幕镜像、�
 - TCP/IP、重启和断开操作集中在当前设备的“概览 → 连接管理”中
 - 设备重启与无线连接断开
 - 首次只有一台在线设备时自动选中；目标断开后保持未选择，需手动确认新的操作设备
+- “概览”约每 2 秒显示当前设备的整机 CPU/GPU 占用、最近 30 秒平均占用和 CPU/GPU 温度；设备未提供可读 GPU 或温度节点时显示“不可用”
 
 ### 镜像与录屏
 
@@ -168,7 +169,7 @@ ADB Mirror Studio 是面向 Windows 的 Android 设备连接、屏幕镜像、�
 
 ## 设备操作、应用与终端
 
-1. “概览”提供设备详情、截图和连接管理。
+1. “概览”提供设备详情、截图、连接管理，以及当前设备的 CPU/GPU 占用和温度。CPU 温度取最高的明确 CPU 热区；采样规则见 [设备性能监测说明](https://github.com/NingCui29/ADB-Mirror-Studio/blob/V1.6.0/docs/device-performance-monitoring.md)。
 2. “屏幕”提供返回、主页、最近任务、电源、音量和截图快捷控制。
 3. “应用”读取、启动、强制停止或卸载用户应用，也支持直接按包名管理。
 4. “终端”提供绑定当前设备的 ADB Shell 和 Logcat 导出。
@@ -330,7 +331,7 @@ commercial/
 
 ```text
 commercial\artifacts\release\
-  AdbMirrorStudio-V1.5.0-win-x64.zip
+  AdbMirrorStudio-V1.6.0-win-x64.zip
 ```
 
 生成安装版：
@@ -345,7 +346,7 @@ commercial\artifacts\release\
 
 ```text
 commercial\artifacts\installer\
-  ADB-Mirror-Studio-Setup-V1.5.0-win-x64.exe
+  ADB-Mirror-Studio-Setup-V1.6.0-win-x64.exe
 ```
 
 ## 第三方组件

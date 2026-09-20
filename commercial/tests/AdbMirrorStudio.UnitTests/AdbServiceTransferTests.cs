@@ -65,6 +65,22 @@ public sealed class AdbServiceTransferTests : IDisposable
     }
 
     [Fact]
+    public async Task GetPerformanceCountersAsync_UsesSelectedDeviceAndReadOnlyShellProbe()
+    {
+        var runner = new CapturingRunner("cpu 1 2 3 4 5 6 7 8\nGPU_PATH=/sys/class/devfreq/fb000000.gpu/load\nGPU_VALUE=42@1000000000Hz\n");
+        var service = new AdbService(runner, CreateFile("adb.exe"));
+
+        var counters = await service.GetPerformanceCountersAsync("device-2");
+
+        Assert.Equal(42, counters.GpuUsagePercent);
+        Assert.Equal(["-s", "device-2", "shell"], runner.LastRequest!.Arguments.Take(3));
+        Assert.Contains("/proc/stat", runner.LastRequest.Arguments[3], StringComparison.Ordinal);
+        Assert.Contains("/sys/class/devfreq/*gpu*/load", runner.LastRequest.Arguments[3], StringComparison.Ordinal);
+        Assert.Contains("/sys/class/thermal/thermal_zone*", runner.LastRequest.Arguments[3], StringComparison.Ordinal);
+        Assert.Equal(TimeSpan.FromSeconds(8), runner.LastRequest.Timeout);
+    }
+
+    [Fact]
     public async Task PullFileAsync_UsesRemoteAbsolutePathAndLocalDirectory()
     {
         var adbPath = CreateFile("adb.exe");

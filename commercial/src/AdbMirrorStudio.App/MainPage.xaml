@@ -272,6 +272,39 @@
                                                     <Button Content="查看详情" Click="DeviceDetails_Click"
                                                             IsEnabled="{Binding CanUseSelectedDevice}" />
                                                 </StackPanel>
+                                                <Grid ColumnSpacing="10">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Border Padding="12" CornerRadius="8"
+                                                            Background="{ThemeResource LayerFillColorDefaultBrush}">
+                                                        <StackPanel Spacing="4">
+                                                            <TextBlock Text="CPU 占用 · 整机" FontWeight="SemiBold" />
+                                                            <TextBlock Text="{Binding CpuUsageText}" FontSize="24" FontWeight="SemiBold" />
+                                                            <TextBlock Opacity="0.68" TextWrapping="Wrap">
+                                                                <Run Text="最近 30 秒平均 " /><Run Text="{Binding CpuAverageText}" />
+                                                            </TextBlock>
+                                                            <TextBlock Opacity="0.78" TextWrapping="Wrap">
+                                                                <Run Text="温度（最高热区） " /><Run Text="{Binding CpuTemperatureText}" />
+                                                            </TextBlock>
+                                                        </StackPanel>
+                                                    </Border>
+                                                    <Border Grid.Column="1" Padding="12" CornerRadius="8"
+                                                            Background="{ThemeResource LayerFillColorDefaultBrush}">
+                                                        <StackPanel Spacing="4">
+                                                            <TextBlock Text="GPU 占用 · 整机" FontWeight="SemiBold" />
+                                                            <TextBlock Text="{Binding GpuUsageText}" FontSize="24" FontWeight="SemiBold" />
+                                                            <TextBlock Opacity="0.68" TextWrapping="Wrap">
+                                                                <Run Text="最近 30 秒平均 " /><Run Text="{Binding GpuAverageText}" />
+                                                            </TextBlock>
+                                                            <TextBlock Opacity="0.78" TextWrapping="Wrap">
+                                                                <Run Text="温度 " /><Run Text="{Binding GpuTemperatureText}" />
+                                                            </TextBlock>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </Grid>
+                                                <TextBlock Text="{Binding PerformanceHint}" Opacity="0.62" TextWrapping="Wrap" />
                                             </StackPanel>
                                         </Border>
                                         <Border x:Name="OverviewConnectionCard" Grid.Row="1" Style="{StaticResource SurfaceCardStyle}">

@@ -54,4 +54,14 @@ public sealed record DeviceDetails(
     string BatteryStatus,
     string StorageSummary);
 
+public sealed record DevicePerformanceCounters(
+    long CpuTotalTicks,
+    long CpuIdleTicks,
+    double? GpuUsagePercent,
+    string? GpuSource,
+    double? CpuTemperatureCelsius = null,
+    string? CpuTemperatureSource = null,
+    double? GpuTemperatureCelsius = null,
+    string? GpuTemperatureSource = null);
+
 public sealed record InstalledApp(string PackageName, bool IsSystemApp = false);

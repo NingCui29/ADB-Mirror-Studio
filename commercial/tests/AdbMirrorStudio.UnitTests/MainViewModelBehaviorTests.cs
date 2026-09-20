@@ -315,6 +315,67 @@ public sealed class MainViewModelBehaviorTests
         Assert.False(model.CanStopSelectedMirror);
     }
 
+    [Fact]
+    public async Task PerformanceReadingsResetWhenSelectedDeviceChangesAndIgnoreLateOldDevice()
+    {
+        var oldRequest = new TaskCompletionSource<DevicePerformanceCounters>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var adb = new FakeAdb
+        {
+            Devices = [Device("first"), Device("second")],
+            Performance = (serial, _) => serial == "first"
+                ? oldRequest.Task
+                : Task.FromResult(new DevicePerformanceCounters(200, 100, 35, "gpu", 62.8, "cpu", 60.5, "gpu-temp"))
+        };
+        using var model = Create(adb);
+        await model.RefreshAsync();
+        model.SelectedDeviceSerial = "first";
+        var oldPoll = model.RefreshPerformanceAsync();
+
+        model.SelectedDeviceSerial = "second";
+        await model.RefreshPerformanceAsync();
+        oldRequest.SetResult(new DevicePerformanceCounters(900, 300, 95, "gpu", 99, "old-cpu", 99, "old-gpu"));
+        await oldPoll;
+
+        Assert.Equal("35.0%", model.GpuUsageText);
+        Assert.Equal("计算中", model.CpuUsageText);
+        Assert.Equal("62.8 °C", model.CpuTemperatureText);
+        Assert.Equal("60.5 °C", model.GpuTemperatureText);
+        Assert.Equal("second", model.SelectedDeviceSerial);
+    }
+
+    [Fact]
+    public async Task PerformanceReadingsShowCpuIntervalAndThirtySecondAverage()
+    {
+        var samples = new Queue<DevicePerformanceCounters>([
+            new(100, 50, 20, "gpu", 61, "cpu", 58, "gpu-temp"),
+            new(200, 80, 40, "gpu", 62, "cpu", 59, "gpu-temp"),
+            new(300, 130, 60, "gpu", 63, "cpu", 60, "gpu-temp")]);
+        var adb = new FakeAdb
+        {
+            Devices = [Device("device")],
+            Performance = (_, _) => Task.FromResult(samples.Dequeue())
+        };
+        using var model = Create(adb);
+        await model.RefreshAsync();
+
+        await model.RefreshPerformanceAsync();
+        Assert.Equal("计算中", model.CpuUsageText);
+        await model.RefreshPerformanceAsync();
+        await model.RefreshPerformanceAsync();
+
+        Assert.Equal("50.0%", model.CpuUsageText);
+        Assert.Equal("60.0%", model.CpuAverageText);
+        Assert.Equal("60.0%", model.GpuUsageText);
+        Assert.Equal("40.0%", model.GpuAverageText);
+        Assert.Equal("63.0 °C", model.CpuTemperatureText);
+        Assert.Equal("60.0 °C", model.GpuTemperatureText);
+        model.SelectedDeviceSerial = null;
+        Assert.Equal("—", model.CpuUsageText);
+        Assert.Equal("—", model.GpuAverageText);
+        Assert.Equal("—", model.CpuTemperatureText);
+        Assert.Equal("—", model.GpuTemperatureText);
+    }
+
     private static DeviceInfo Device(string serial) => new(serial, "model", "product", DeviceState.Online, ConnectionKind.Usb, DateTimeOffset.UtcNow);
 
     private static MainViewModel Create(FakeAdb adb, FakeMirror? mirror = null, FakeUpdates? updates = null)
@@ -380,6 +441,7 @@ public sealed class MainViewModelBehaviorTests
         public Func<CancellationToken, Task<string>>? Shell { get; init; }
         public Func<CancellationToken, Task<string>>? Connect { get; init; }
         public Func<CancellationToken, Task<DeviceDetails>>? Details { get; init; }
+        public Func<string, CancellationToken, Task<DevicePerformanceCounters>>? Performance { get; init; }
         public Func<CancellationToken, Task<string>>? Push { get; set; }
         public List<(string, string)> Uninstalls { get; } = [];
         public List<(string, string)> ShellCommands { get; } = [];
@@ -398,6 +460,7 @@ public sealed class MainViewModelBehaviorTests
         { Pushes.Add(localPath); return Push?.Invoke(cancellationToken) ?? Task.FromResult("Success"); }
         public Task<bool> IsOnlineAsync(string serial, CancellationToken cancellationToken = default) => Task.FromResult(true);
         public Task<DeviceDetails> GetDeviceDetailsAsync(string serial, CancellationToken cancellationToken = default) => Details?.Invoke(cancellationToken) ?? throw new NotSupportedException();
+        public Task<DevicePerformanceCounters> GetPerformanceCountersAsync(string serial, CancellationToken cancellationToken = default) => Performance?.Invoke(serial, cancellationToken) ?? throw new NotSupportedException();
         public Task<string> CaptureScreenshotAsync(string serial, string localPath, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<string> GetLogcatSnapshotAsync(string serial, int maxLines = 500, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<string> PullFileAsync(string serial, string remotePath, string localDirectory, CancellationToken cancellationToken = default) => throw new NotSupportedException();

@@ -188,6 +188,23 @@ public sealed class MainPageMarkupTests
     }
 
     [Fact]
+    public void OverviewShowsCurrentDeviceCpuAndGpuWithThirtySecondAverages()
+    {
+        var overview = WorkspaceArea("概览");
+        var bindings = overview.Descendants()
+            .Select(element => (string?)element.Attribute("Text"))
+            .Where(text => text is not null)
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.Contains("{Binding CpuUsageText}", bindings);
+        Assert.Contains("{Binding CpuAverageText}", bindings);
+        Assert.Contains("{Binding CpuTemperatureText}", bindings);
+        Assert.Contains("{Binding GpuUsageText}", bindings);
+        Assert.Contains("{Binding GpuAverageText}", bindings);
+        Assert.Contains("{Binding GpuTemperatureText}", bindings);
+    }
+
+    [Fact]
     public void ConnectUsesCurrentEditorTextAndRejectsBlankEndpoint()
     {
         Assert.Equal("{Binding Endpoint, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}",

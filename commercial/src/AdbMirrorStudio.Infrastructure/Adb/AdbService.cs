@@ -150,6 +150,27 @@ public sealed class AdbService(ICommandRunner commandRunner, string adbPath) : I
             ParseStorage(storageOutput));
     }
 
+    public async Task<DevicePerformanceCounters> GetPerformanceCountersAsync(
+        string serial,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateSerial(serial);
+        const string command =
+            "head -n 1 /proc/stat; " +
+            "for p in /sys/class/devfreq/*gpu*/load /sys/class/misc/mali0/device/utilization; do " +
+            "if [ -r \"$p\" ]; then v=$(cat \"$p\" 2>/dev/null); " +
+            "if [ -n \"$v\" ]; then printf \"GPU_PATH=%s\\nGPU_VALUE=%s\\n\" \"$p\" \"$v\"; break; fi; fi; done; " +
+            "for z in /sys/class/thermal/thermal_zone*; do " +
+            "[ -r \"$z/type\" ] && [ -r \"$z/temp\" ] || continue; " +
+            "IFS= read -r t < \"$z/type\"; IFS= read -r v < \"$z/temp\"; " +
+            "printf \"THERMAL=%s|%s|%s\\n\" \"$z\" \"$t\" \"$v\"; done";
+        var result = await ExecuteAsync(
+            ["-s", serial.Trim(), "shell", command],
+            TimeSpan.FromSeconds(8),
+            cancellationToken).ConfigureAwait(false);
+        return DevicePerformanceParser.Parse(result.StandardOutput);
+    }
+
     public async Task<string> CaptureScreenshotAsync(
         string serial,
         string localPath,

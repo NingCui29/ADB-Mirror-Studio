@@ -13,6 +13,7 @@ namespace AdbMirrorStudio.App;
 public sealed partial class MainPage : Page
 {
     private readonly DispatcherTimer _autoRefreshTimer = new() { Interval = TimeSpan.FromSeconds(5) };
+    private readonly DispatcherTimer _performanceTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private bool _initializingSettings;
     private bool _shutdown;
     public MainViewModel? ViewModel { get; private set; }
@@ -21,6 +22,7 @@ public sealed partial class MainPage : Page
     {
         InitializeComponent();
         _autoRefreshTimer.Tick += AutoRefreshTimer_Tick;
+        _performanceTimer.Tick += PerformanceTimer_Tick;
     }
 
     private void WorkspaceTabs_Loaded(object sender, RoutedEventArgs e) =>
@@ -72,7 +74,12 @@ public sealed partial class MainPage : Page
             ApplyTheme(ViewModel.Theme, updateSelector: true);
             AutoRefreshToggle.IsOn = ViewModel.AutoRefresh;
             if (!ViewModel.FirstRunCompleted) await ShowFirstRunDialogAsync();
-            if (!_shutdown) _autoRefreshTimer.Start();
+            if (!_shutdown)
+            {
+                _autoRefreshTimer.Start();
+                _performanceTimer.Start();
+                _ = ViewModel.RefreshPerformanceAsync();
+            }
         }
         catch (Exception exception)
         {
@@ -101,6 +108,8 @@ public sealed partial class MainPage : Page
         IsEnabled = false;
         _autoRefreshTimer.Stop();
         _autoRefreshTimer.Tick -= AutoRefreshTimer_Tick;
+        _performanceTimer.Stop();
+        _performanceTimer.Tick -= PerformanceTimer_Tick;
         ViewModel?.Dispose();
     }
 
@@ -573,6 +582,11 @@ public sealed partial class MainPage : Page
     private async void AutoRefreshTimer_Tick(object? sender, object e)
     {
         if (!_shutdown && ViewModel is { AutoRefresh: true, IsBusy: false }) await ViewModel.RefreshAsync(silent: true);
+    }
+
+    private async void PerformanceTimer_Tick(object? sender, object e)
+    {
+        if (!_shutdown && ViewModel is not null) await ViewModel.RefreshPerformanceAsync();
     }
 
     private async Task ShowFirstRunDialogAsync()
