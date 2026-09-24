@@ -324,7 +324,8 @@ public sealed class MainViewModelBehaviorTests
             Devices = [Device("first"), Device("second")],
             Performance = (serial, _) => serial == "first"
                 ? oldRequest.Task
-                : Task.FromResult(new DevicePerformanceCounters(200, 100, 35, "gpu", 62.8, "cpu", 60.5, "gpu-temp", 8 * 1024 * 1024, 2 * 1024 * 1024))
+                : Task.FromResult(new DevicePerformanceCounters(200, 100, 35, "gpu", 62.8, "cpu", 60.5, "gpu-temp", 8 * 1024 * 1024, 2 * 1024 * 1024,
+                    45, 2112000000, "/sys/class/devfreq/dmc/load"))
         };
         using var model = Create(adb);
         await model.RefreshAsync();
@@ -342,6 +343,8 @@ public sealed class MainViewModelBehaviorTests
         Assert.Equal("60.5 °C", model.GpuTemperatureText);
         Assert.Equal("75.0%", model.MemoryUsageText);
         Assert.Equal("已用 6.0 / 8.0 GiB", model.MemoryDetailText);
+        Assert.Equal("45.0%", model.DdrUsageText);
+        Assert.Equal("频率 2.112 GHz", model.DdrFrequencyText);
         Assert.Equal("second", model.SelectedDeviceSerial);
     }
 
@@ -349,9 +352,9 @@ public sealed class MainViewModelBehaviorTests
     public async Task PerformanceReadingsShowCpuIntervalAndThirtySecondAverage()
     {
         var samples = new Queue<DevicePerformanceCounters>([
-            new(100, 50, 20, "gpu", 61, "cpu", 58, "gpu-temp", 1000, 400),
-            new(200, 80, 40, "gpu", 62, "cpu", 59, "gpu-temp", 1000, 300),
-            new(300, 130, 60, "gpu", 63, "cpu", 60, "gpu-temp", 1000, 200)]);
+            new(100, 50, 20, "gpu", 61, "cpu", 58, "gpu-temp", 1000, 400, 20, 1068000000, "dmc"),
+            new(200, 80, 40, "gpu", 62, "cpu", 59, "gpu-temp", 1000, 300, 40, 1560000000, "dmc"),
+            new(300, 130, 60, "gpu", 63, "cpu", 60, "gpu-temp", 1000, 200, 60, 2112000000, "dmc")]);
         var adb = new FakeAdb
         {
             Devices = [Device("device")],
@@ -373,6 +376,9 @@ public sealed class MainViewModelBehaviorTests
         Assert.Equal("60.0 °C", model.GpuTemperatureText);
         Assert.Equal("80.0%", model.MemoryUsageText);
         Assert.Equal("70.0%", model.MemoryAverageText);
+        Assert.Equal("60.0%", model.DdrUsageText);
+        Assert.Equal("40.0%", model.DdrAverageText);
+        Assert.Equal("频率 2.112 GHz", model.DdrFrequencyText);
         model.SelectedDeviceSerial = null;
         Assert.Equal("—", model.CpuUsageText);
         Assert.Equal("—", model.GpuAverageText);
@@ -381,6 +387,9 @@ public sealed class MainViewModelBehaviorTests
         Assert.Equal("—", model.MemoryUsageText);
         Assert.Equal("—", model.MemoryAverageText);
         Assert.Equal("—", model.MemoryDetailText);
+        Assert.Equal("—", model.DdrUsageText);
+        Assert.Equal("—", model.DdrAverageText);
+        Assert.Equal("—", model.DdrFrequencyText);
     }
 
     private static DeviceInfo Device(string serial) => new(serial, "model", "product", DeviceState.Online, ConnectionKind.Usb, DateTimeOffset.UtcNow);

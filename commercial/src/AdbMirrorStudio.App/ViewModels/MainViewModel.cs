@@ -46,6 +46,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private string _memoryUsageText = "—";
     private string _memoryAverageText = "—";
     private string _memoryDetailText = "—";
+    private string _ddrUsageText = "—";
+    private string _ddrAverageText = "—";
+    private string _ddrFrequencyText = "—";
     private string _performanceHint = "选择在线设备后开始采样";
     private int _busyCount;
     private int _transferRunning;
@@ -296,6 +299,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public string MemoryUsageText { get => _memoryUsageText; private set => SetField(ref _memoryUsageText, value); }
     public string MemoryAverageText { get => _memoryAverageText; private set => SetField(ref _memoryAverageText, value); }
     public string MemoryDetailText { get => _memoryDetailText; private set => SetField(ref _memoryDetailText, value); }
+    public string DdrUsageText { get => _ddrUsageText; private set => SetField(ref _ddrUsageText, value); }
+    public string DdrAverageText { get => _ddrAverageText; private set => SetField(ref _ddrAverageText, value); }
+    public string DdrFrequencyText { get => _ddrFrequencyText; private set => SetField(ref _ddrFrequencyText, value); }
     public string PerformanceHint { get => _performanceHint; private set => SetField(ref _performanceHint, value); }
 
     public async Task RefreshPerformanceAsync()
@@ -320,9 +326,15 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             MemoryUsageText = FormatPerformancePercent(reading.MemoryUsagePercent, "不可用");
             MemoryAverageText = FormatPerformancePercent(reading.MemoryAveragePercent, "不可用");
             MemoryDetailText = FormatMemoryUsage(counters.MemoryTotalKilobytes, counters.MemoryAvailableKilobytes);
-            PerformanceHint = reading.GpuUsagePercent is null
-                ? "整机 CPU / 内存 · 最近 30 秒采样均值；此设备未提供可读的 GPU 占用节点"
-                : "整机 CPU / GPU / 内存 · 最近 30 秒有效采样均值 · 约每 2 秒更新";
+            DdrUsageText = FormatPerformancePercent(reading.DdrUsagePercent, "不可用");
+            DdrAverageText = FormatPerformancePercent(reading.DdrAveragePercent, "不可用");
+            DdrFrequencyText = FormatFrequency(counters.DdrFrequencyHertz, "不可用");
+            var unavailable = new List<string>();
+            if (reading.GpuUsagePercent is null) unavailable.Add("GPU");
+            if (reading.DdrUsagePercent is null) unavailable.Add("DDR");
+            PerformanceHint = unavailable.Count == 0
+                ? "整机 CPU / GPU / 内存 / DDR · 最近 30 秒有效采样均值 · 约每 2 秒更新"
+                : $"整机性能 · 最近 30 秒有效采样均值；此设备未提供可读的 {string.Join("、", unavailable)} 占用节点";
         }
         catch (OperationCanceledException) { }
         catch (Exception)
@@ -339,6 +351,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 MemoryUsageText = "暂不可用";
                 MemoryAverageText = "—";
                 MemoryDetailText = "—";
+                DdrUsageText = "暂不可用";
+                DdrAverageText = "—";
+                DdrFrequencyText = "—";
                 PerformanceHint = "设备性能采样失败，下一次刷新将重试";
             }
         }
@@ -365,6 +380,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         MemoryUsageText = "—";
         MemoryAverageText = "—";
         MemoryDetailText = "—";
+        DdrUsageText = "—";
+        DdrAverageText = "—";
+        DdrFrequencyText = "—";
         PerformanceHint = SelectedDeviceSerial is null
             ? "选择在线设备后开始采样"
             : Devices.FirstOrDefault(device => device.Serial == SelectedDeviceSerial)?.State == DeviceState.Online
@@ -376,6 +394,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         value is { } percent ? $"{percent:F1}%" : fallback;
     private static string FormatTemperature(double? value, string fallback) =>
         value is { } celsius ? $"{celsius:F1} °C" : fallback;
+    private static string FormatFrequency(long? value, string fallback)
+    {
+        if (value is not { } hertz || hertz <= 0) return fallback;
+        return hertz >= 1_000_000_000
+            ? $"频率 {hertz / 1_000_000_000d:F3} GHz"
+            : $"频率 {hertz / 1_000_000d:F0} MHz";
+    }
     private static string FormatMemoryUsage(long? totalKilobytes, long? availableKilobytes)
     {
         if (totalKilobytes is not { } total || total <= 0 || availableKilobytes is not { } available

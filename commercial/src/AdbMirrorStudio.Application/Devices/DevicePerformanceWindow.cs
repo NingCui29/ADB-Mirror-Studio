@@ -9,15 +9,19 @@ public sealed record DevicePerformanceReading(
     double? GpuAveragePercent,
     double? MemoryUsagePercent,
     double? MemoryAveragePercent,
+    double? DdrUsagePercent,
+    double? DdrAveragePercent,
     int CpuSampleCount,
     int GpuSampleCount,
     int MemorySampleCount,
+    int DdrSampleCount,
     DateTimeOffset SampledAt,
-    string? GpuSource);
+    string? GpuSource,
+    string? DdrSource);
 
 public sealed class DevicePerformanceWindow(TimeSpan window)
 {
-    private readonly Queue<(DateTimeOffset Time, double? Cpu, double? Gpu, double? Memory)> _samples = new();
+    private readonly Queue<(DateTimeOffset Time, double? Cpu, double? Gpu, double? Memory, double? Ddr)> _samples = new();
     private DevicePerformanceCounters? _previous;
 
     public DevicePerformanceReading Add(DevicePerformanceCounters counters, DateTimeOffset sampledAt)
@@ -42,13 +46,14 @@ public sealed class DevicePerformanceWindow(TimeSpan window)
             memory = 100d * (total - available) / total;
         }
 
-        _samples.Enqueue((sampledAt, cpu, counters.GpuUsagePercent, memory));
+        _samples.Enqueue((sampledAt, cpu, counters.GpuUsagePercent, memory, counters.DdrUsagePercent));
         while (_samples.Count > 0 && sampledAt - _samples.Peek().Time > window)
             _samples.Dequeue();
 
         var cpuSamples = _samples.Where(sample => sample.Cpu.HasValue).Select(sample => sample.Cpu!.Value).ToArray();
         var gpuSamples = _samples.Where(sample => sample.Gpu.HasValue).Select(sample => sample.Gpu!.Value).ToArray();
         var memorySamples = _samples.Where(sample => sample.Memory.HasValue).Select(sample => sample.Memory!.Value).ToArray();
+        var ddrSamples = _samples.Where(sample => sample.Ddr.HasValue).Select(sample => sample.Ddr!.Value).ToArray();
         return new DevicePerformanceReading(
             cpu,
             cpuSamples.Length == 0 ? null : cpuSamples.Average(),
@@ -56,10 +61,14 @@ public sealed class DevicePerformanceWindow(TimeSpan window)
             gpuSamples.Length == 0 ? null : gpuSamples.Average(),
             memory,
             memorySamples.Length == 0 ? null : memorySamples.Average(),
+            counters.DdrUsagePercent,
+            ddrSamples.Length == 0 ? null : ddrSamples.Average(),
             cpuSamples.Length,
             gpuSamples.Length,
             memorySamples.Length,
+            ddrSamples.Length,
             sampledAt,
-            counters.GpuSource);
+            counters.GpuSource,
+            counters.DdrSource);
     }
 }

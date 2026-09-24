@@ -160,6 +160,10 @@ public sealed class AdbService(ICommandRunner commandRunner, string adbPath) : I
             "for p in /sys/class/devfreq/*gpu*/load /sys/class/misc/mali0/device/utilization; do " +
             "if [ -r \"$p\" ]; then v=$(cat \"$p\" 2>/dev/null); " +
             "if [ -n \"$v\" ]; then printf \"GPU_PATH=%s\\nGPU_VALUE=%s\\n\" \"$p\" \"$v\"; break; fi; fi; done; " +
+            "for p in /sys/class/devfreq/dmc/load /sys/class/devfreq/*dmc*/load /sys/class/devfreq/*ddr*/load; do " +
+            "if [ -r \"$p\" ]; then printf \"DMC_PATH=%s\\n\" \"$p\"; " +
+            "for attempt in 1 2 3; do v=$(cat \"$p\" 2>/dev/null); " +
+            "[ -n \"$v\" ] && printf \"DMC_VALUE=%s\\n\" \"$v\"; sleep 0.05; done; break; fi; done; " +
             "for z in /sys/class/thermal/thermal_zone*; do " +
             "[ -r \"$z/type\" ] && [ -r \"$z/temp\" ] || continue; " +
             "IFS= read -r t < \"$z/type\"; IFS= read -r v < \"$z/temp\"; " +

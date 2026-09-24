@@ -272,12 +272,15 @@
                                                     <Button Content="查看详情" Click="DeviceDetails_Click"
                                                             IsEnabled="{Binding CanUseSelectedDevice}" />
                                                 </StackPanel>
-                                                <Grid ColumnSpacing="10">
+                                                <Grid ColumnSpacing="10" RowSpacing="10">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*" />
                                                         <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="*" />
                                                     </Grid.ColumnDefinitions>
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto" />
+                                                        <RowDefinition Height="Auto" />
+                                                    </Grid.RowDefinitions>
                                                     <Border Padding="12" CornerRadius="8"
                                                             Background="{ThemeResource LayerFillColorDefaultBrush}">
                                                         <StackPanel Spacing="4">
@@ -304,7 +307,7 @@
                                                             </TextBlock>
                                                         </StackPanel>
                                                     </Border>
-                                                    <Border Grid.Column="2" Padding="12" CornerRadius="8"
+                                                    <Border Grid.Row="1" Padding="12" CornerRadius="8"
                                                             Background="{ThemeResource LayerFillColorDefaultBrush}">
                                                         <StackPanel Spacing="4">
                                                             <TextBlock Text="内存占用 · 整机" FontWeight="SemiBold" />
@@ -313,6 +316,17 @@
                                                                 <Run Text="30 秒平均 " /><Run Text="{Binding MemoryAverageText}" />
                                                             </TextBlock>
                                                             <TextBlock Text="{Binding MemoryDetailText}" FontSize="12" Opacity="0.78" TextWrapping="Wrap" />
+                                                        </StackPanel>
+                                                    </Border>
+                                                    <Border Grid.Row="1" Grid.Column="1" Padding="12" CornerRadius="8"
+                                                            Background="{ThemeResource LayerFillColorDefaultBrush}">
+                                                        <StackPanel Spacing="4">
+                                                            <TextBlock Text="DDR 带宽占用 · 整机" FontWeight="SemiBold" />
+                                                            <TextBlock Text="{Binding DdrUsageText}" FontSize="24" FontWeight="SemiBold" />
+                                                            <TextBlock FontSize="12" Opacity="0.68" TextWrapping="Wrap">
+                                                                <Run Text="30 秒平均 " /><Run Text="{Binding DdrAverageText}" />
+                                                            </TextBlock>
+                                                            <TextBlock Text="{Binding DdrFrequencyText}" FontSize="12" Opacity="0.78" TextWrapping="Wrap" />
                                                         </StackPanel>
                                                     </Border>
                                                 </Grid>

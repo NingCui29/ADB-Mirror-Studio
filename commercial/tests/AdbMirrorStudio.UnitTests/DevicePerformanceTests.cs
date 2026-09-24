@@ -27,6 +27,43 @@ public sealed class DevicePerformanceTests
     }
 
     [Fact]
+    public void ParsesDdrControllerLoadAndFrequency()
+    {
+        var counters = DevicePerformanceParser.Parse(
+            "cpu 1 2 3 4 5 6 7 8\n" +
+            "DMC_PATH=/sys/class/devfreq/dmc/load\nDMC_VALUE=36@2112000000Hz\n");
+
+        Assert.Equal(36, counters.DdrUsagePercent);
+        Assert.Equal(2112000000, counters.DdrFrequencyHertz);
+        Assert.Equal("/sys/class/devfreq/dmc/load", counters.DdrSource);
+    }
+
+    [Fact]
+    public void SkipsTransientInvalidDdrSamples()
+    {
+        var counters = DevicePerformanceParser.Parse(
+            "cpu 1 2 3 4 5 6 7 8\n" +
+            "DMC_PATH=/sys/class/devfreq/dmc/load\n" +
+            "DMC_VALUE=1434@2112000000Hz\nDMC_VALUE=58@2112000000Hz\n");
+
+        Assert.Equal(58, counters.DdrUsagePercent);
+        Assert.Equal(2112000000, counters.DdrFrequencyHertz);
+    }
+
+    [Theory]
+    [InlineData("DMC_VALUE=unavailable")]
+    [InlineData("DMC_VALUE=101@2112000000Hz")]
+    [InlineData("DMC_VALUE=-1@2112000000Hz")]
+    public void InvalidDdrLoadDoesNotProduceUtilization(string dmcLine)
+    {
+        var counters = DevicePerformanceParser.Parse("cpu 1 2 3 4 5 6 7 8\n" + dmcLine);
+
+        Assert.Null(counters.DdrUsagePercent);
+        Assert.Null(counters.DdrFrequencyHertz);
+        Assert.Null(counters.DdrSource);
+    }
+
+    [Fact]
     public void ParsesCpuHotspotAndGpuThermalZonesInMillidegrees()
     {
         var counters = DevicePerformanceParser.Parse(
@@ -126,6 +163,24 @@ public sealed class DevicePerformanceTests
         Assert.Equal(50, later.MemoryUsagePercent);
         Assert.Equal(50, later.MemoryAveragePercent);
         Assert.Equal(1, later.MemorySampleCount);
+    }
+
+    [Fact]
+    public void ComputesCurrentAndRecentDdrUsage()
+    {
+        var window = new DevicePerformanceWindow(TimeSpan.FromSeconds(30));
+        var start = DateTimeOffset.UtcNow;
+        var first = window.Add(new DevicePerformanceCounters(100, 50, null, null,
+            DdrUsagePercent: 20), start);
+        var second = window.Add(new DevicePerformanceCounters(200, 100, null, null,
+            DdrUsagePercent: 60), start.AddSeconds(2));
+        var later = window.Add(new DevicePerformanceCounters(300, 150, null, null,
+            DdrUsagePercent: 40), start.AddSeconds(34));
+
+        Assert.Equal(20, first.DdrUsagePercent);
+        Assert.Equal(40, second.DdrAveragePercent);
+        Assert.Equal(40, later.DdrAveragePercent);
+        Assert.Equal(1, later.DdrSampleCount);
     }
 
     [Fact]

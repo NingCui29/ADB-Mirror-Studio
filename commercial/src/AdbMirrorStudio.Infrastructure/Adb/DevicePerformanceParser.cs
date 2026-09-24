@@ -22,16 +22,13 @@ public static class DevicePerformanceParser
 
         var gpuPath = lines.FirstOrDefault(line => line.StartsWith("GPU_PATH=", StringComparison.Ordinal))?[9..];
         var gpuValue = lines.FirstOrDefault(line => line.StartsWith("GPU_VALUE=", StringComparison.Ordinal))?[10..];
-        double? gpuPercent = null;
-        if (gpuValue is not null)
-        {
-            var rawPercent = gpuValue.Split('@', 2)[0].TrimEnd('%').Trim();
-            if (double.TryParse(rawPercent, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var parsed)
-                && double.IsFinite(parsed) && parsed is >= 0 and <= 100)
-            {
-                gpuPercent = parsed;
-            }
-        }
+        var gpuPercent = ParseUsagePercent(gpuValue);
+        var ddrPath = lines.FirstOrDefault(line => line.StartsWith("DMC_PATH=", StringComparison.Ordinal))?[9..];
+        var ddrValue = lines.Where(line => line.StartsWith("DMC_VALUE=", StringComparison.Ordinal))
+            .Select(line => line[10..])
+            .FirstOrDefault(value => ParseUsagePercent(value) is not null);
+        var ddrPercent = ParseUsagePercent(ddrValue);
+        var ddrFrequency = ParseFrequencyHertz(ddrValue);
 
         var thermalSamples = lines.Where(line => line.StartsWith("THERMAL=", StringComparison.Ordinal))
             .Select(ParseThermalSample).OfType<ThermalSample>().ToArray();
@@ -57,7 +54,33 @@ public static class DevicePerformanceParser
             gpuTemperature?.Celsius,
             gpuTemperature?.Path,
             memoryTotal,
-            memoryAvailable);
+            memoryAvailable,
+            ddrPercent,
+            ddrPercent is null ? null : ddrFrequency,
+            ddrPercent is null ? null : ddrPath);
+    }
+
+    private static double? ParseUsagePercent(string? value)
+    {
+        if (value is null) return null;
+        var rawPercent = value.Split('@', 2)[0].TrimEnd('%').Trim();
+        return double.TryParse(rawPercent, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var parsed)
+            && double.IsFinite(parsed) && parsed is >= 0 and <= 100
+            ? parsed
+            : null;
+    }
+
+    private static long? ParseFrequencyHertz(string? value)
+    {
+        if (value is null) return null;
+        var separator = value.IndexOf('@');
+        if (separator < 0 || separator == value.Length - 1) return null;
+        var rawFrequency = value[(separator + 1)..].Trim();
+        if (rawFrequency.EndsWith("Hz", StringComparison.OrdinalIgnoreCase))
+            rawFrequency = rawFrequency[..^2].Trim();
+        return long.TryParse(rawFrequency, NumberStyles.None, CultureInfo.InvariantCulture, out var hertz) && hertz > 0
+            ? hertz
+            : null;
     }
 
     private static long? ParseMemoryKilobytes(IEnumerable<string> lines, string field)

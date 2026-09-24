@@ -205,6 +205,9 @@ public sealed class MainPageMarkupTests
         Assert.Contains("{Binding MemoryUsageText}", bindings);
         Assert.Contains("{Binding MemoryAverageText}", bindings);
         Assert.Contains("{Binding MemoryDetailText}", bindings);
+        Assert.Contains("{Binding DdrUsageText}", bindings);
+        Assert.Contains("{Binding DdrAverageText}", bindings);
+        Assert.Contains("{Binding DdrFrequencyText}", bindings);
     }
 
     [Fact]

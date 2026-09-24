@@ -64,6 +64,9 @@ public sealed record DevicePerformanceCounters(
     double? GpuTemperatureCelsius = null,
     string? GpuTemperatureSource = null,
     long? MemoryTotalKilobytes = null,
-    long? MemoryAvailableKilobytes = null);
+    long? MemoryAvailableKilobytes = null,
+    double? DdrUsagePercent = null,
+    long? DdrFrequencyHertz = null,
+    string? DdrSource = null);
 
 public sealed record InstalledApp(string PackageName, bool IsSystemApp = false);
