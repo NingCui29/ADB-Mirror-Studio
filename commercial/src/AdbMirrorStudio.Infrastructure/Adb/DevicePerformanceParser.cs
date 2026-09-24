@@ -39,6 +39,13 @@ public static class DevicePerformanceParser
             .OrderByDescending(sample => sample.Celsius).FirstOrDefault();
         var gpuTemperature = thermalSamples.Where(sample => IsGpuThermalType(sample.Type))
             .OrderByDescending(sample => sample.Celsius).FirstOrDefault();
+        var memoryTotal = ParseMemoryKilobytes(lines, "MemTotal:");
+        var memoryAvailable = ParseMemoryKilobytes(lines, "MemAvailable:");
+        if (memoryTotal is not > 0 || memoryAvailable is null || memoryAvailable < 0 || memoryAvailable > memoryTotal)
+        {
+            memoryTotal = null;
+            memoryAvailable = null;
+        }
 
         return new DevicePerformanceCounters(
             ticks.Sum(),
@@ -48,7 +55,20 @@ public static class DevicePerformanceParser
             cpuTemperature?.Celsius,
             cpuTemperature?.Path,
             gpuTemperature?.Celsius,
-            gpuTemperature?.Path);
+            gpuTemperature?.Path,
+            memoryTotal,
+            memoryAvailable);
+    }
+
+    private static long? ParseMemoryKilobytes(IEnumerable<string> lines, string field)
+    {
+        var line = lines.FirstOrDefault(candidate => candidate.StartsWith(field, StringComparison.Ordinal));
+        if (line is null) return null;
+        var value = line[field.Length..].Split(' ', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault();
+        return long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var kilobytes)
+            ? kilobytes
+            : null;
     }
 
     private static ThermalSample? ParseThermalSample(string line)

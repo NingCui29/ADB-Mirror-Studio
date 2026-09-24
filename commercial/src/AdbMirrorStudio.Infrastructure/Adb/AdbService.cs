@@ -156,7 +156,7 @@ public sealed class AdbService(ICommandRunner commandRunner, string adbPath) : I
     {
         ValidateSerial(serial);
         const string command =
-            "head -n 1 /proc/stat; " +
+            "head -n 1 /proc/stat; cat /proc/meminfo; " +
             "for p in /sys/class/devfreq/*gpu*/load /sys/class/misc/mali0/device/utilization; do " +
             "if [ -r \"$p\" ]; then v=$(cat \"$p\" 2>/dev/null); " +
             "if [ -n \"$v\" ]; then printf \"GPU_PATH=%s\\nGPU_VALUE=%s\\n\" \"$p\" \"$v\"; break; fi; fi; done; " +

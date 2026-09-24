@@ -43,6 +43,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private string _gpuUsageText = "—";
     private string _gpuAverageText = "—";
     private string _gpuTemperatureText = "—";
+    private string _memoryUsageText = "—";
+    private string _memoryAverageText = "—";
+    private string _memoryDetailText = "—";
     private string _performanceHint = "选择在线设备后开始采样";
     private int _busyCount;
     private int _transferRunning;
@@ -290,6 +293,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public string GpuUsageText { get => _gpuUsageText; private set => SetField(ref _gpuUsageText, value); }
     public string GpuAverageText { get => _gpuAverageText; private set => SetField(ref _gpuAverageText, value); }
     public string GpuTemperatureText { get => _gpuTemperatureText; private set => SetField(ref _gpuTemperatureText, value); }
+    public string MemoryUsageText { get => _memoryUsageText; private set => SetField(ref _memoryUsageText, value); }
+    public string MemoryAverageText { get => _memoryAverageText; private set => SetField(ref _memoryAverageText, value); }
+    public string MemoryDetailText { get => _memoryDetailText; private set => SetField(ref _memoryDetailText, value); }
     public string PerformanceHint { get => _performanceHint; private set => SetField(ref _performanceHint, value); }
 
     public async Task RefreshPerformanceAsync()
@@ -311,9 +317,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             GpuUsageText = FormatPerformancePercent(reading.GpuUsagePercent, "不可用");
             GpuAverageText = FormatPerformancePercent(reading.GpuAveragePercent, "不可用");
             GpuTemperatureText = FormatTemperature(counters.GpuTemperatureCelsius, "不可用");
+            MemoryUsageText = FormatPerformancePercent(reading.MemoryUsagePercent, "不可用");
+            MemoryAverageText = FormatPerformancePercent(reading.MemoryAveragePercent, "不可用");
+            MemoryDetailText = FormatMemoryUsage(counters.MemoryTotalKilobytes, counters.MemoryAvailableKilobytes);
             PerformanceHint = reading.GpuUsagePercent is null
-                ? "整机 CPU · 最近 30 秒采样均值；此设备未提供可读的 GPU 占用节点"
-                : "整机 CPU / GPU · 最近 30 秒有效采样均值 · 约每 2 秒更新";
+                ? "整机 CPU / 内存 · 最近 30 秒采样均值；此设备未提供可读的 GPU 占用节点"
+                : "整机 CPU / GPU / 内存 · 最近 30 秒有效采样均值 · 约每 2 秒更新";
         }
         catch (OperationCanceledException) { }
         catch (Exception)
@@ -327,6 +336,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 GpuUsageText = "暂不可用";
                 GpuAverageText = "—";
                 GpuTemperatureText = "暂不可用";
+                MemoryUsageText = "暂不可用";
+                MemoryAverageText = "—";
+                MemoryDetailText = "—";
                 PerformanceHint = "设备性能采样失败，下一次刷新将重试";
             }
         }
@@ -350,6 +362,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         GpuUsageText = "—";
         GpuAverageText = "—";
         GpuTemperatureText = "—";
+        MemoryUsageText = "—";
+        MemoryAverageText = "—";
+        MemoryDetailText = "—";
         PerformanceHint = SelectedDeviceSerial is null
             ? "选择在线设备后开始采样"
             : Devices.FirstOrDefault(device => device.Serial == SelectedDeviceSerial)?.State == DeviceState.Online
@@ -361,6 +376,14 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         value is { } percent ? $"{percent:F1}%" : fallback;
     private static string FormatTemperature(double? value, string fallback) =>
         value is { } celsius ? $"{celsius:F1} °C" : fallback;
+    private static string FormatMemoryUsage(long? totalKilobytes, long? availableKilobytes)
+    {
+        if (totalKilobytes is not { } total || total <= 0 || availableKilobytes is not { } available
+            || available < 0 || available > total) return "—";
+        const double kilobytesPerGibibyte = 1024d * 1024d;
+        var used = total - available;
+        return $"已用 {used / kilobytesPerGibibyte:F1} / {total / kilobytesPerGibibyte:F1} GiB";
+    }
     public bool HasSelectedDevice => !string.IsNullOrWhiteSpace(SelectedDeviceSerial);
     public bool SelectedDeviceIsMirroring => Devices.FirstOrDefault(device =>
         string.Equals(device.Serial, SelectedDeviceSerial, StringComparison.Ordinal))?.IsMirroring == true;

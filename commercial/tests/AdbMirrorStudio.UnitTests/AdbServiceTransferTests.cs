@@ -75,6 +75,7 @@ public sealed class AdbServiceTransferTests : IDisposable
         Assert.Equal(42, counters.GpuUsagePercent);
         Assert.Equal(["-s", "device-2", "shell"], runner.LastRequest!.Arguments.Take(3));
         Assert.Contains("/proc/stat", runner.LastRequest.Arguments[3], StringComparison.Ordinal);
+        Assert.Contains("/proc/meminfo", runner.LastRequest.Arguments[3], StringComparison.Ordinal);
         Assert.Contains("/sys/class/devfreq/*gpu*/load", runner.LastRequest.Arguments[3], StringComparison.Ordinal);
         Assert.Contains("/sys/class/thermal/thermal_zone*", runner.LastRequest.Arguments[3], StringComparison.Ordinal);
         Assert.Equal(TimeSpan.FromSeconds(8), runner.LastRequest.Timeout);

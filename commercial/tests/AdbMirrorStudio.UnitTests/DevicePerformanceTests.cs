@@ -44,6 +44,28 @@ public sealed class DevicePerformanceTests
     }
 
     [Fact]
+    public void ParsesTotalAndAvailableMemoryInKilobytes()
+    {
+        var counters = DevicePerformanceParser.Parse(
+            "cpu 1 2 3 4 5 6 7 8\nMemTotal: 8104732 kB\nMemAvailable: 1662564 kB\n");
+
+        Assert.Equal(8104732, counters.MemoryTotalKilobytes);
+        Assert.Equal(1662564, counters.MemoryAvailableKilobytes);
+    }
+
+    [Theory]
+    [InlineData("MemTotal: 1000 kB\nMemAvailable: 1200 kB")]
+    [InlineData("MemTotal: invalid kB\nMemAvailable: 500 kB")]
+    [InlineData("MemTotal: 1000 kB")]
+    public void InvalidOrIncompleteMemoryDoesNotProduceUsage(string memoryLines)
+    {
+        var counters = DevicePerformanceParser.Parse("cpu 1 2 3 4 5 6 7 8\n" + memoryLines);
+
+        Assert.Null(counters.MemoryTotalKilobytes);
+        Assert.Null(counters.MemoryAvailableKilobytes);
+    }
+
+    [Fact]
     public void UnnamedOrInvalidThermalZonesDoNotBecomeCpuOrGpuTemperatures()
     {
         var counters = DevicePerformanceParser.Parse(
@@ -85,6 +107,25 @@ public sealed class DevicePerformanceTests
         Assert.Equal(40, third.GpuAveragePercent);
         Assert.Equal(50, later.CpuAveragePercent);
         Assert.Equal(80, later.GpuAveragePercent);
+    }
+
+    [Fact]
+    public void ComputesCurrentAndRecentMemoryUsage()
+    {
+        var window = new DevicePerformanceWindow(TimeSpan.FromSeconds(30));
+        var start = DateTimeOffset.UtcNow;
+        var first = window.Add(new DevicePerformanceCounters(100, 50, null, null,
+            MemoryTotalKilobytes: 1000, MemoryAvailableKilobytes: 400), start);
+        var second = window.Add(new DevicePerformanceCounters(200, 100, null, null,
+            MemoryTotalKilobytes: 1000, MemoryAvailableKilobytes: 200), start.AddSeconds(2));
+        var later = window.Add(new DevicePerformanceCounters(300, 150, null, null,
+            MemoryTotalKilobytes: 1000, MemoryAvailableKilobytes: 500), start.AddSeconds(34));
+
+        Assert.Equal(60, first.MemoryUsagePercent);
+        Assert.Equal(70, second.MemoryAveragePercent);
+        Assert.Equal(50, later.MemoryUsagePercent);
+        Assert.Equal(50, later.MemoryAveragePercent);
+        Assert.Equal(1, later.MemorySampleCount);
     }
 
     [Fact]

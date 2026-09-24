@@ -202,6 +202,9 @@ public sealed class MainPageMarkupTests
         Assert.Contains("{Binding GpuUsageText}", bindings);
         Assert.Contains("{Binding GpuAverageText}", bindings);
         Assert.Contains("{Binding GpuTemperatureText}", bindings);
+        Assert.Contains("{Binding MemoryUsageText}", bindings);
+        Assert.Contains("{Binding MemoryAverageText}", bindings);
+        Assert.Contains("{Binding MemoryDetailText}", bindings);
     }
 
     [Fact]
