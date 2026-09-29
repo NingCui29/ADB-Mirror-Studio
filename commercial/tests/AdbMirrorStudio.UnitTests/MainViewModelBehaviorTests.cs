@@ -392,6 +392,26 @@ public sealed class MainViewModelBehaviorTests
         Assert.Equal("—", model.DdrFrequencyText);
     }
 
+    [Fact]
+    public async Task PerformanceReadingsExplainRestrictedDdrAccess()
+    {
+        var adb = new FakeAdb
+        {
+            Devices = [Device("device")],
+            Performance = (_, _) => Task.FromResult(new DevicePerformanceCounters(
+                100, 50, 25, "kgsl", DdrAccessRestricted: true))
+        };
+        using var model = Create(adb);
+        await model.RefreshAsync();
+        await model.RefreshPerformanceAsync();
+
+        Assert.Equal("25.0%", model.GpuUsageText);
+        Assert.Equal("系统未开放", model.DdrUsageText);
+        Assert.Equal("系统未开放", model.DdrAverageText);
+        Assert.Equal("系统未开放", model.DdrFrequencyText);
+        Assert.Contains("DDR（系统未开放）", model.PerformanceHint);
+    }
+
     private static DeviceInfo Device(string serial) => new(serial, "model", "product", DeviceState.Online, ConnectionKind.Usb, DateTimeOffset.UtcNow);
 
     private static MainViewModel Create(FakeAdb adb, FakeMirror? mirror = null, FakeUpdates? updates = null)

@@ -2,7 +2,7 @@
 
 ADB Mirror Studio 是面向 Windows 的 Android 设备连接、屏幕镜像、录屏、文件传输和环境诊断工作台。界面采用 WinUI 3 与 Desktop Acrylic，ADB、scrcpy 和应用运行时均可随便携包分发。所有功能永久免费，无账户、无试用、无订阅、无激活和功能分级。
 
-> 当前版本：`V1.8.0`。个人、组织和企业均可在合法授权的设备上免费使用全部功能。
+> 当前版本：`V1.8.1`。个人、组织和企业均可在合法授权的设备上免费使用全部功能。
 
 ## 系统要求
 
@@ -31,7 +31,7 @@ ADB Mirror Studio 是面向 Windows 的 Android 设备连接、屏幕镜像、�
 - TCP/IP、重启和断开操作集中在当前设备的“概览 → 连接管理”中
 - 设备重启与无线连接断开
 - 首次只有一台在线设备时自动选中；目标断开后保持未选择，需手动确认新的操作设备
-- “概览”约每 2 秒显示当前设备的整机 CPU/GPU/内存/DDR 带宽占用、最近 30 秒平均占用、CPU/GPU 温度及 DDR 频率；设备未提供可读 GPU、DDR 或温度节点时显示“不可用”
+- “概览”约每 2 秒显示当前设备的整机 CPU/GPU/内存/DDR 带宽占用、最近 30 秒平均占用、CPU/GPU 温度及 DDR 频率；兼容 Mali devfreq 与 Qualcomm Adreno KGSL GPU 数据源，Qualcomm 系统未向 ADB shell 开放 DDR 计数器时显示“系统未开放”
 
 ### 镜像与录屏
 
@@ -331,7 +331,7 @@ commercial/
 
 ```text
 commercial\artifacts\release\
-  AdbMirrorStudio-V1.8.0-win-x64.zip
+  AdbMirrorStudio-V1.8.1-win-x64.zip
 ```
 
 生成安装版：
@@ -346,7 +346,7 @@ commercial\artifacts\release\
 
 ```text
 commercial\artifacts\installer\
-  ADB-Mirror-Studio-Setup-V1.8.0-win-x64.exe
+  ADB-Mirror-Studio-Setup-V1.8.1-win-x64.exe
 ```
 
 ## 第三方组件

@@ -78,7 +78,9 @@ public sealed class AdbServiceTransferTests : IDisposable
         Assert.Contains("/proc/stat", runner.LastRequest.Arguments[3], StringComparison.Ordinal);
         Assert.Contains("/proc/meminfo", runner.LastRequest.Arguments[3], StringComparison.Ordinal);
         Assert.Contains("/sys/class/devfreq/*gpu*/load", runner.LastRequest.Arguments[3], StringComparison.Ordinal);
+        Assert.Contains("/sys/class/kgsl/kgsl-3d0/gpubusy", runner.LastRequest.Arguments[3], StringComparison.Ordinal);
         Assert.Contains("/sys/class/devfreq/dmc/load", runner.LastRequest.Arguments[3], StringComparison.Ordinal);
+        Assert.Contains("DMC_STATUS=RESTRICTED", runner.LastRequest.Arguments[3], StringComparison.Ordinal);
         Assert.Contains("for attempt in 1 2 3", runner.LastRequest.Arguments[3], StringComparison.Ordinal);
         Assert.Contains("/sys/class/thermal/thermal_zone*", runner.LastRequest.Arguments[3], StringComparison.Ordinal);
         Assert.Equal(TimeSpan.FromSeconds(8), runner.LastRequest.Timeout);

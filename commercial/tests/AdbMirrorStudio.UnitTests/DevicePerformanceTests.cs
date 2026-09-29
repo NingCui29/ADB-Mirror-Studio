@@ -26,6 +26,29 @@ public sealed class DevicePerformanceTests
         Assert.Equal(42, counters.GpuUsagePercent);
     }
 
+    [Theory]
+    [InlineData("146736 1005513", 14.5931479752)]
+    [InlineData("0 0", 0)]
+    public void ParsesQualcommKgslBusyAndTotalTime(string value, double expected)
+    {
+        var counters = DevicePerformanceParser.Parse(
+            $"cpu 1 2 3 4 5 6 7 8\nKGSL_BUSY_PATH=/sys/class/kgsl/kgsl-3d0/gpubusy\nKGSL_BUSY_VALUE={value}\n");
+
+        Assert.Equal(expected, counters.GpuUsagePercent!.Value, 8);
+        Assert.Equal("/sys/class/kgsl/kgsl-3d0/gpubusy", counters.GpuSource);
+    }
+
+    [Fact]
+    public void PrefersGenericGpuLoadOverKgslFallback()
+    {
+        var counters = DevicePerformanceParser.Parse(
+            "cpu 1 2 3 4 5 6 7 8\nGPU_PATH=/sys/class/devfreq/gpu/load\nGPU_VALUE=42\n" +
+            "KGSL_BUSY_PATH=/sys/class/kgsl/kgsl-3d0/gpubusy\nKGSL_BUSY_VALUE=90 100\n");
+
+        Assert.Equal(42, counters.GpuUsagePercent);
+        Assert.Equal("/sys/class/devfreq/gpu/load", counters.GpuSource);
+    }
+
     [Fact]
     public void ParsesDdrControllerLoadAndFrequency()
     {
@@ -61,6 +84,16 @@ public sealed class DevicePerformanceTests
         Assert.Null(counters.DdrUsagePercent);
         Assert.Null(counters.DdrFrequencyHertz);
         Assert.Null(counters.DdrSource);
+    }
+
+    [Fact]
+    public void ReportsRestrictedDdrWithoutInventingUtilization()
+    {
+        var counters = DevicePerformanceParser.Parse(
+            "cpu 1 2 3 4 5 6 7 8\nDMC_STATUS=RESTRICTED\n");
+
+        Assert.Null(counters.DdrUsagePercent);
+        Assert.True(counters.DdrAccessRestricted);
     }
 
     [Fact]
@@ -118,6 +151,8 @@ public sealed class DevicePerformanceTests
     [Theory]
     [InlineData("GPU_VALUE=unavailable")]
     [InlineData("GPU_VALUE=150@1000000000Hz")]
+    [InlineData("KGSL_BUSY_VALUE=101 100")]
+    [InlineData("KGSL_BUSY_VALUE=bad data")]
     [InlineData("")]
     public void UnsupportedGpuDoesNotProduceInventedUtilization(string gpuLine)
     {

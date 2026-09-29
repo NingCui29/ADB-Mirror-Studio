@@ -23,12 +23,20 @@ public static class DevicePerformanceParser
         var gpuPath = lines.FirstOrDefault(line => line.StartsWith("GPU_PATH=", StringComparison.Ordinal))?[9..];
         var gpuValue = lines.FirstOrDefault(line => line.StartsWith("GPU_VALUE=", StringComparison.Ordinal))?[10..];
         var gpuPercent = ParseUsagePercent(gpuValue);
+        if (gpuPercent is null)
+        {
+            var kgslBusyPath = lines.FirstOrDefault(line => line.StartsWith("KGSL_BUSY_PATH=", StringComparison.Ordinal))?[15..];
+            var kgslBusyValue = lines.FirstOrDefault(line => line.StartsWith("KGSL_BUSY_VALUE=", StringComparison.Ordinal))?[16..];
+            gpuPercent = ParseKgslBusyPercent(kgslBusyValue);
+            gpuPath = gpuPercent is null ? null : kgslBusyPath;
+        }
         var ddrPath = lines.FirstOrDefault(line => line.StartsWith("DMC_PATH=", StringComparison.Ordinal))?[9..];
         var ddrValue = lines.Where(line => line.StartsWith("DMC_VALUE=", StringComparison.Ordinal))
             .Select(line => line[10..])
             .FirstOrDefault(value => ParseUsagePercent(value) is not null);
         var ddrPercent = ParseUsagePercent(ddrValue);
         var ddrFrequency = ParseFrequencyHertz(ddrValue);
+        var ddrAccessRestricted = lines.Contains("DMC_STATUS=RESTRICTED", StringComparer.Ordinal);
 
         var thermalSamples = lines.Where(line => line.StartsWith("THERMAL=", StringComparison.Ordinal))
             .Select(ParseThermalSample).OfType<ThermalSample>().ToArray();
@@ -57,7 +65,20 @@ public static class DevicePerformanceParser
             memoryAvailable,
             ddrPercent,
             ddrPercent is null ? null : ddrFrequency,
-            ddrPercent is null ? null : ddrPath);
+            ddrPercent is null ? null : ddrPath,
+            ddrPercent is null && ddrAccessRestricted);
+    }
+
+    private static double? ParseKgslBusyPercent(string? value)
+    {
+        if (value is null) return null;
+        var fields = value.Split(' ', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (fields.Length != 2
+            || !long.TryParse(fields[0], NumberStyles.None, CultureInfo.InvariantCulture, out var busy)
+            || !long.TryParse(fields[1], NumberStyles.None, CultureInfo.InvariantCulture, out var total)
+            || busy < 0 || total < 0 || busy > total) return null;
+        if (total == 0) return busy == 0 ? 0d : null;
+        return 100d * busy / total;
     }
 
     private static double? ParseUsagePercent(string? value)

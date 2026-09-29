@@ -326,12 +326,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             MemoryUsageText = FormatPerformancePercent(reading.MemoryUsagePercent, "不可用");
             MemoryAverageText = FormatPerformancePercent(reading.MemoryAveragePercent, "不可用");
             MemoryDetailText = FormatMemoryUsage(counters.MemoryTotalKilobytes, counters.MemoryAvailableKilobytes);
-            DdrUsageText = FormatPerformancePercent(reading.DdrUsagePercent, "不可用");
-            DdrAverageText = FormatPerformancePercent(reading.DdrAveragePercent, "不可用");
-            DdrFrequencyText = FormatFrequency(counters.DdrFrequencyHertz, "不可用");
+            var ddrFallback = counters.DdrAccessRestricted ? "系统未开放" : "不可用";
+            DdrUsageText = FormatPerformancePercent(reading.DdrUsagePercent, ddrFallback);
+            DdrAverageText = FormatPerformancePercent(reading.DdrAveragePercent, ddrFallback);
+            DdrFrequencyText = FormatFrequency(counters.DdrFrequencyHertz, ddrFallback);
             var unavailable = new List<string>();
             if (reading.GpuUsagePercent is null) unavailable.Add("GPU");
-            if (reading.DdrUsagePercent is null) unavailable.Add("DDR");
+            if (reading.DdrUsagePercent is null) unavailable.Add(counters.DdrAccessRestricted ? "DDR（系统未开放）" : "DDR");
             PerformanceHint = unavailable.Count == 0
                 ? "整机 CPU / GPU / 内存 / DDR · 最近 30 秒有效采样均值 · 约每 2 秒更新"
                 : $"整机性能 · 最近 30 秒有效采样均值；此设备未提供可读的 {string.Join("、", unavailable)} 占用节点";

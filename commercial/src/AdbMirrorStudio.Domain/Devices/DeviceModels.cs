@@ -67,6 +67,7 @@ public sealed record DevicePerformanceCounters(
     long? MemoryAvailableKilobytes = null,
     double? DdrUsagePercent = null,
     long? DdrFrequencyHertz = null,
-    string? DdrSource = null);
+    string? DdrSource = null,
+    bool DdrAccessRestricted = false);
 
 public sealed record InstalledApp(string PackageName, bool IsSystemApp = false);
