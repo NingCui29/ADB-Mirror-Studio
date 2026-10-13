@@ -272,65 +272,81 @@
                                                     <Button Content="查看详情" Click="DeviceDetails_Click"
                                                             IsEnabled="{Binding CanUseSelectedDevice}" />
                                                 </StackPanel>
-                                                <Grid ColumnSpacing="10" RowSpacing="10">
+                                                <Grid ColumnSpacing="12">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
                                                     </Grid.ColumnDefinitions>
-                                                    <Grid.RowDefinitions>
-                                                        <RowDefinition Height="Auto" />
-                                                        <RowDefinition Height="Auto" />
-                                                    </Grid.RowDefinitions>
-                                                    <Border Padding="12" CornerRadius="8"
-                                                            Background="{ThemeResource LayerFillColorDefaultBrush}">
-                                                        <StackPanel Spacing="4">
-                                                            <TextBlock Text="CPU 占用 · 整机" FontWeight="SemiBold" />
-                                                            <TextBlock Text="{Binding CpuUsageText}" FontSize="24" FontWeight="SemiBold" />
-                                                            <TextBlock FontSize="12" Opacity="0.68" TextWrapping="Wrap">
-                                                                <Run Text="30 秒平均 " /><Run Text="{Binding CpuAverageText}" />
-                                                            </TextBlock>
-                                                            <TextBlock FontSize="12" Opacity="0.78" TextWrapping="Wrap">
-                                                                <Run Text="温度（最高热区） " /><Run Text="{Binding CpuTemperatureText}" />
-                                                            </TextBlock>
-                                                        </StackPanel>
-                                                    </Border>
-                                                    <Border Grid.Column="1" Padding="12" CornerRadius="8"
-                                                            Background="{ThemeResource LayerFillColorDefaultBrush}">
-                                                        <StackPanel Spacing="4">
-                                                            <TextBlock Text="GPU 占用 · 整机" FontWeight="SemiBold" />
-                                                            <TextBlock Text="{Binding GpuUsageText}" FontSize="24" FontWeight="SemiBold" />
-                                                            <TextBlock FontSize="12" Opacity="0.68" TextWrapping="Wrap">
-                                                                <Run Text="30 秒平均 " /><Run Text="{Binding GpuAverageText}" />
-                                                            </TextBlock>
-                                                            <TextBlock FontSize="12" Opacity="0.78" TextWrapping="Wrap">
-                                                                <Run Text="温度 " /><Run Text="{Binding GpuTemperatureText}" />
-                                                            </TextBlock>
-                                                        </StackPanel>
-                                                    </Border>
-                                                    <Border Grid.Row="1" Padding="12" CornerRadius="8"
-                                                            Background="{ThemeResource LayerFillColorDefaultBrush}">
-                                                        <StackPanel Spacing="4">
-                                                            <TextBlock Text="内存占用 · 整机" FontWeight="SemiBold" />
-                                                            <TextBlock Text="{Binding MemoryUsageText}" FontSize="24" FontWeight="SemiBold" />
-                                                            <TextBlock FontSize="12" Opacity="0.68" TextWrapping="Wrap">
-                                                                <Run Text="30 秒平均 " /><Run Text="{Binding MemoryAverageText}" />
-                                                            </TextBlock>
-                                                            <TextBlock Text="{Binding MemoryDetailText}" FontSize="12" Opacity="0.78" TextWrapping="Wrap" />
-                                                        </StackPanel>
-                                                    </Border>
-                                                    <Border Grid.Row="1" Grid.Column="1" Padding="12" CornerRadius="8"
-                                                            Background="{ThemeResource LayerFillColorDefaultBrush}">
-                                                        <StackPanel Spacing="4">
-                                                            <TextBlock Text="DDR 带宽占用 · 整机" FontWeight="SemiBold" />
-                                                            <TextBlock Text="{Binding DdrUsageText}" FontSize="24" FontWeight="SemiBold" />
-                                                            <TextBlock FontSize="12" Opacity="0.68" TextWrapping="Wrap">
-                                                                <Run Text="30 秒平均 " /><Run Text="{Binding DdrAverageText}" />
-                                                            </TextBlock>
-                                                            <TextBlock Text="{Binding DdrFrequencyText}" FontSize="12" Opacity="0.78" TextWrapping="Wrap" />
-                                                        </StackPanel>
-                                                    </Border>
+                                                    <StackPanel VerticalAlignment="Center" Spacing="3">
+                                                        <TextBlock Text="性能监测" FontWeight="SemiBold" />
+                                                        <TextBlock Text="CPU / GPU / 内存 / DDR" FontSize="12" Opacity="0.62" />
+                                                    </StackPanel>
+                                                    <ToggleSwitch x:Name="PerformanceMonitoringToggle" Grid.Column="1"
+                                                                  VerticalAlignment="Center" OnContent="开启" OffContent="关闭"
+                                                                  AutomationProperties.Name="性能监测"
+                                                                  Toggled="PerformanceMonitoringToggle_Toggled" />
                                                 </Grid>
-                                                <TextBlock Text="{Binding PerformanceHint}" Opacity="0.62" TextWrapping="Wrap" />
+                                                <StackPanel x:Name="PerformanceMetricsPanel" Spacing="12" Visibility="Collapsed">
+                                                    <Grid ColumnSpacing="10" RowSpacing="10">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto" />
+                                                            <RowDefinition Height="Auto" />
+                                                        </Grid.RowDefinitions>
+                                                        <Border Padding="12" CornerRadius="8"
+                                                                Background="{ThemeResource LayerFillColorDefaultBrush}">
+                                                            <StackPanel Spacing="4">
+                                                                <TextBlock Text="CPU 占用 · 整机" FontWeight="SemiBold" />
+                                                                <TextBlock Text="{Binding CpuUsageText}" FontSize="24" FontWeight="SemiBold" />
+                                                                <TextBlock FontSize="12" Opacity="0.68" TextWrapping="Wrap">
+                                                                    <Run Text="30 秒平均 " /><Run Text="{Binding CpuAverageText}" />
+                                                                </TextBlock>
+                                                                <TextBlock FontSize="12" Opacity="0.78" TextWrapping="Wrap">
+                                                                    <Run Text="温度（最高热区） " /><Run Text="{Binding CpuTemperatureText}" />
+                                                                </TextBlock>
+                                                            </StackPanel>
+                                                        </Border>
+                                                        <Border Grid.Column="1" Padding="12" CornerRadius="8"
+                                                                Background="{ThemeResource LayerFillColorDefaultBrush}">
+                                                            <StackPanel Spacing="4">
+                                                                <TextBlock Text="GPU 占用 · 整机" FontWeight="SemiBold" />
+                                                                <TextBlock Text="{Binding GpuUsageText}" FontSize="24" FontWeight="SemiBold" />
+                                                                <TextBlock FontSize="12" Opacity="0.68" TextWrapping="Wrap">
+                                                                    <Run Text="30 秒平均 " /><Run Text="{Binding GpuAverageText}" />
+                                                                </TextBlock>
+                                                                <TextBlock FontSize="12" Opacity="0.78" TextWrapping="Wrap">
+                                                                    <Run Text="温度 " /><Run Text="{Binding GpuTemperatureText}" />
+                                                                </TextBlock>
+                                                            </StackPanel>
+                                                        </Border>
+                                                        <Border Grid.Row="1" Padding="12" CornerRadius="8"
+                                                                Background="{ThemeResource LayerFillColorDefaultBrush}">
+                                                            <StackPanel Spacing="4">
+                                                                <TextBlock Text="内存占用 · 整机" FontWeight="SemiBold" />
+                                                                <TextBlock Text="{Binding MemoryUsageText}" FontSize="24" FontWeight="SemiBold" />
+                                                                <TextBlock FontSize="12" Opacity="0.68" TextWrapping="Wrap">
+                                                                    <Run Text="30 秒平均 " /><Run Text="{Binding MemoryAverageText}" />
+                                                                </TextBlock>
+                                                                <TextBlock Text="{Binding MemoryDetailText}" FontSize="12" Opacity="0.78" TextWrapping="Wrap" />
+                                                            </StackPanel>
+                                                        </Border>
+                                                        <Border Grid.Row="1" Grid.Column="1" Padding="12" CornerRadius="8"
+                                                                Background="{ThemeResource LayerFillColorDefaultBrush}">
+                                                            <StackPanel Spacing="4">
+                                                                <TextBlock Text="DDR 带宽占用 · 整机" FontWeight="SemiBold" />
+                                                                <TextBlock Text="{Binding DdrUsageText}" FontSize="24" FontWeight="SemiBold" />
+                                                                <TextBlock FontSize="12" Opacity="0.68" TextWrapping="Wrap">
+                                                                    <Run Text="30 秒平均 " /><Run Text="{Binding DdrAverageText}" />
+                                                                </TextBlock>
+                                                                <TextBlock Text="{Binding DdrFrequencyText}" FontSize="12" Opacity="0.78" TextWrapping="Wrap" />
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </Grid>
+                                                    <TextBlock Text="{Binding PerformanceHint}" Opacity="0.62" TextWrapping="Wrap" />
+                                                </StackPanel>
                                             </StackPanel>
                                         </Border>
                                         <Border x:Name="OverviewConnectionCard" Grid.Row="1" Style="{StaticResource SurfaceCardStyle}">

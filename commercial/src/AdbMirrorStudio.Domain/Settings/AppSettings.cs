@@ -14,6 +14,7 @@ public sealed record AppSettings(
     public const int CurrentSchemaVersion = 2;
 
     public string[] RememberedEndpoints { get; init; } = [];
+    public bool PerformanceMonitoringEnabled { get; init; }
 
     public AppSettings UpgradeConnectionHistory()
     {

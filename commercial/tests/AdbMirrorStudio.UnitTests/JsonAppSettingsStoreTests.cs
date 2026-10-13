@@ -7,8 +7,10 @@ public sealed class JsonAppSettingsStoreTests : IDisposable
 {
     private readonly string _directory = Path.Combine(Path.GetTempPath(), "AdbMirrorStudio.Tests", Guid.NewGuid().ToString("N"));
 
-    [Fact]
-    public async Task SaveAndLoad_RoundTripsSettings()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SaveAndLoad_RoundTripsSettings(bool performanceMonitoringEnabled)
     {
         var store = new JsonAppSettingsStore(Path.Combine(_directory, "settings.json"));
         var expected = AppSettings.Default with
@@ -16,6 +18,7 @@ public sealed class JsonAppSettingsStoreTests : IDisposable
             Theme = "Dark",
             LastEndpoint = "pixel.local:5555",
             HasConnectedBefore = true,
+            PerformanceMonitoringEnabled = performanceMonitoringEnabled,
             RememberedEndpoints = ["pixel.local:5555", "192.168.1.8:5555"]
         };
 
@@ -27,6 +30,7 @@ public sealed class JsonAppSettingsStoreTests : IDisposable
         Assert.Equal(expected.Language, actual.Language);
         Assert.Equal(expected.LastEndpoint, actual.LastEndpoint);
         Assert.Equal(expected.AutoRefresh, actual.AutoRefresh);
+        Assert.Equal(expected.PerformanceMonitoringEnabled, actual.PerformanceMonitoringEnabled);
         Assert.Equal(expected.MirrorProfileId, actual.MirrorProfileId);
         Assert.Equal(expected.FirstRunCompleted, actual.FirstRunCompleted);
         Assert.Equal(expected.AutoReconnect, actual.AutoReconnect);
@@ -85,6 +89,30 @@ public sealed class JsonAppSettingsStoreTests : IDisposable
         Assert.Equal(AppSettings.CurrentSchemaVersion, upgraded.SchemaVersion);
         Assert.Equal(["pixel.local:5555"], upgraded.RememberedEndpoints);
         Assert.False(upgraded.AutoReconnect);
+        Assert.False(upgraded.PerformanceMonitoringEnabled);
+    }
+
+    [Fact]
+    public async Task Load_SettingsWithoutPerformanceMonitoring_DefaultsToDisabled()
+    {
+        Directory.CreateDirectory(_directory);
+        var path = Path.Combine(_directory, "settings.json");
+        await File.WriteAllTextAsync(path, """
+            {
+              "schemaVersion": 2,
+              "theme": "Dark",
+              "language": "zh-CN",
+              "lastEndpoint": "",
+              "autoRefresh": true,
+              "mirrorProfileId": "balanced"
+            }
+            """);
+
+        var actual = await new JsonAppSettingsStore(path).LoadAsync();
+
+        Assert.Equal("Dark", actual.Theme);
+        Assert.True(actual.AutoRefresh);
+        Assert.False(actual.PerformanceMonitoringEnabled);
     }
 
     [Fact]

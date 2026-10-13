@@ -49,7 +49,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private string _ddrUsageText = "—";
     private string _ddrAverageText = "—";
     private string _ddrFrequencyText = "—";
-    private string _performanceHint = "选择在线设备后开始采样";
+    private string _performanceHint = "性能监测已关闭";
     private int _busyCount;
     private int _transferRunning;
     private bool _disposed;
@@ -216,6 +216,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool HasNoRecordings => Recordings.Count == 0;
     public string Theme => _settings.Theme;
     public bool AutoRefresh => _settings.AutoRefresh;
+    public bool PerformanceMonitoringEnabled => _settings.PerformanceMonitoringEnabled;
     public bool HasRememberedEndpoints => RememberedEndpoints.Count > 0;
     public bool FirstRunCompleted => _settings.FirstRunCompleted;
     public string AppVersion => AppVersionInfo.ProductVersion;
@@ -306,7 +307,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task RefreshPerformanceAsync()
     {
-        if (_disposed || SelectedDeviceSerial is not { } serial || _performanceCancellation is not null) return;
+        if (_disposed || !PerformanceMonitoringEnabled || SelectedDeviceSerial is not { } serial
+            || _performanceCancellation is not null) return;
         if (Devices.FirstOrDefault(device => device.Serial == serial)?.State != DeviceState.Online) return;
         var generation = _performanceGeneration;
         var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_lifetimeToken);
@@ -314,7 +316,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         try
         {
             var counters = await _adb.GetPerformanceCountersAsync(serial, cancellation.Token);
-            if (_disposed || cancellation.IsCancellationRequested || generation != _performanceGeneration
+            if (_disposed || !PerformanceMonitoringEnabled || cancellation.IsCancellationRequested || generation != _performanceGeneration
                 || !string.Equals(serial, SelectedDeviceSerial, StringComparison.Ordinal)) return;
             var reading = _performanceWindow.Add(counters, DateTimeOffset.UtcNow);
             CpuUsageText = FormatPerformancePercent(reading.CpuUsagePercent, "计算中");
@@ -340,7 +342,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         catch (OperationCanceledException) { }
         catch (Exception)
         {
-            if (!_disposed && generation == _performanceGeneration)
+            if (!_disposed && PerformanceMonitoringEnabled && !cancellation.IsCancellationRequested
+                && generation == _performanceGeneration)
             {
                 _performanceWindow = new DevicePerformanceWindow(TimeSpan.FromSeconds(30));
                 CpuUsageText = "暂不可用";
@@ -384,11 +387,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         DdrUsageText = "—";
         DdrAverageText = "—";
         DdrFrequencyText = "—";
-        PerformanceHint = SelectedDeviceSerial is null
-            ? "选择在线设备后开始采样"
-            : Devices.FirstOrDefault(device => device.Serial == SelectedDeviceSerial)?.State == DeviceState.Online
-                ? "正在采集设备性能…"
-                : "当前设备未在线，连接后开始采样";
+        PerformanceHint = !PerformanceMonitoringEnabled
+            ? "性能监测已关闭"
+            : SelectedDeviceSerial is null
+                ? "选择在线设备后开始采样"
+                : Devices.FirstOrDefault(device => device.Serial == SelectedDeviceSerial)?.State == DeviceState.Online
+                    ? "正在采集设备性能…"
+                    : "当前设备未在线，连接后开始采样";
     }
 
     private static string FormatPerformancePercent(double? value, string fallback) =>
@@ -521,6 +526,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             : MirrorProfile.Balanced.Id;
         OnPropertyChanged(nameof(Theme));
         OnPropertyChanged(nameof(AutoRefresh));
+        OnPropertyChanged(nameof(PerformanceMonitoringEnabled));
+        ResetPerformance();
         if (loadedSettings.SchemaVersion != AppSettings.CurrentSchemaVersion
             || loadedSettings.AutoReconnect
             || loadedSettings.HasConnectedBefore != _settings.HasConnectedBefore
@@ -555,6 +562,15 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         OnPropertyChanged(nameof(AutoRefresh));
         await SaveSettingsSafelyAsync();
         StatusText = enabled ? "已启用设备自动刷新（每 5 秒）" : "已关闭设备自动刷新";
+    }
+
+    public async Task SetPerformanceMonitoringAsync(bool enabled)
+    {
+        if (_disposed || PerformanceMonitoringEnabled == enabled) return;
+        _settings = _settings with { PerformanceMonitoringEnabled = enabled };
+        ResetPerformance();
+        OnPropertyChanged(nameof(PerformanceMonitoringEnabled));
+        await SaveSettingsSafelyAsync();
     }
 
     public async Task SetMirrorProfileAsync(string profileId)

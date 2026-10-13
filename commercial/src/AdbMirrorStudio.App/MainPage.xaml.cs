@@ -73,12 +73,12 @@ public sealed partial class MainPage : Page
             if (_shutdown) return;
             ApplyTheme(ViewModel.Theme, updateSelector: true);
             AutoRefreshToggle.IsOn = ViewModel.AutoRefresh;
+            PerformanceMonitoringToggle.IsOn = ViewModel.PerformanceMonitoringEnabled;
             if (!ViewModel.FirstRunCompleted) await ShowFirstRunDialogAsync();
             if (!_shutdown)
             {
                 _autoRefreshTimer.Start();
-                _performanceTimer.Start();
-                _ = ViewModel.RefreshPerformanceAsync();
+                UpdatePerformanceMonitoring();
             }
         }
         catch (Exception exception)
@@ -586,7 +586,30 @@ public sealed partial class MainPage : Page
 
     private async void PerformanceTimer_Tick(object? sender, object e)
     {
-        if (!_shutdown && ViewModel is not null) await ViewModel.RefreshPerformanceAsync();
+        if (!_shutdown && ViewModel is { PerformanceMonitoringEnabled: true }) await ViewModel.RefreshPerformanceAsync();
+    }
+
+    private async void PerformanceMonitoringToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_shutdown || _initializingSettings || ViewModel is null || sender is not ToggleSwitch toggle) return;
+        var save = ViewModel.SetPerformanceMonitoringAsync(toggle.IsOn);
+        UpdatePerformanceMonitoring();
+        await save;
+    }
+
+    private void UpdatePerformanceMonitoring()
+    {
+        var enabled = !_shutdown && ViewModel is { PerformanceMonitoringEnabled: true };
+        PerformanceMetricsPanel.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
+        if (enabled)
+        {
+            _performanceTimer.Start();
+            _ = ViewModel!.RefreshPerformanceAsync();
+        }
+        else
+        {
+            _performanceTimer.Stop();
+        }
     }
 
     private async Task ShowFirstRunDialogAsync()
