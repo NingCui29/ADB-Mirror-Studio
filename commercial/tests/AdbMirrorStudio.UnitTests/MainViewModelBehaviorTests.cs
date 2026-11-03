@@ -12,7 +12,7 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace AdbMirrorStudio.UnitTests;
 
-public sealed class MainViewModelBehaviorTests
+public sealed partial class MainViewModelBehaviorTests
 {
     [Theory]
     [InlineData(false)]
@@ -339,12 +339,16 @@ public sealed class MainViewModelBehaviorTests
         await oldPoll;
 
         Assert.Equal("35.0%", model.GpuUsageText);
+        Assert.Equal(35d, model.GpuUsagePercent);
         Assert.Equal("计算中", model.CpuUsageText);
+        Assert.Equal(0d, model.CpuUsagePercent);
         Assert.Equal("62.8 °C", model.CpuTemperatureText);
         Assert.Equal("60.5 °C", model.GpuTemperatureText);
         Assert.Equal("75.0%", model.MemoryUsageText);
+        Assert.Equal(75d, model.MemoryUsagePercent);
         Assert.Equal("已用 6.0 / 8.0 GiB", model.MemoryDetailText);
         Assert.Equal("45.0%", model.DdrUsageText);
+        Assert.Equal(45d, model.DdrUsagePercent);
         Assert.Equal("频率 2.112 GHz", model.DdrFrequencyText);
         Assert.Equal("second", model.SelectedDeviceSerial);
     }
@@ -371,14 +375,18 @@ public sealed class MainViewModelBehaviorTests
         await model.RefreshPerformanceAsync();
 
         Assert.Equal("50.0%", model.CpuUsageText);
+        Assert.Equal(50d, model.CpuUsagePercent);
         Assert.Equal("60.0%", model.CpuAverageText);
         Assert.Equal("60.0%", model.GpuUsageText);
+        Assert.Equal(60d, model.GpuUsagePercent);
         Assert.Equal("40.0%", model.GpuAverageText);
         Assert.Equal("63.0 °C", model.CpuTemperatureText);
         Assert.Equal("60.0 °C", model.GpuTemperatureText);
         Assert.Equal("80.0%", model.MemoryUsageText);
+        Assert.Equal(80d, model.MemoryUsagePercent);
         Assert.Equal("70.0%", model.MemoryAverageText);
         Assert.Equal("60.0%", model.DdrUsageText);
+        Assert.Equal(60d, model.DdrUsagePercent);
         Assert.Equal("40.0%", model.DdrAverageText);
         Assert.Equal("频率 2.112 GHz", model.DdrFrequencyText);
         model.SelectedDeviceSerial = null;
@@ -392,6 +400,8 @@ public sealed class MainViewModelBehaviorTests
         Assert.Equal("—", model.DdrUsageText);
         Assert.Equal("—", model.DdrAverageText);
         Assert.Equal("—", model.DdrFrequencyText);
+        Assert.All(new[] { model.CpuUsagePercent, model.GpuUsagePercent, model.MemoryUsagePercent, model.DdrUsagePercent },
+            percent => Assert.Equal(0d, percent));
     }
 
     [Fact]
@@ -410,6 +420,7 @@ public sealed class MainViewModelBehaviorTests
 
         Assert.Equal("25.0%", model.GpuUsageText);
         Assert.Equal("系统未开放", model.DdrUsageText);
+        Assert.Equal(0d, model.DdrUsagePercent);
         Assert.Equal("系统未开放", model.DdrAverageText);
         Assert.Equal("系统未开放", model.DdrFrequencyText);
         Assert.Contains("DDR（系统未开放）", model.PerformanceHint);
@@ -575,6 +586,8 @@ public sealed class MainViewModelBehaviorTests
 
     private static void AssertPerformanceReset(MainViewModel model)
     {
+        Assert.All(new[] { model.CpuUsagePercent, model.GpuUsagePercent, model.MemoryUsagePercent, model.DdrUsagePercent },
+            percent => Assert.Equal(0d, percent));
         Assert.All(new[]
         {
             model.CpuUsageText, model.CpuAverageText, model.CpuTemperatureText,
@@ -586,13 +599,14 @@ public sealed class MainViewModelBehaviorTests
 
     private static DeviceInfo Device(string serial) => new(serial, "model", "product", DeviceState.Online, ConnectionKind.Usb, DateTimeOffset.UtcNow);
 
-    private static MainViewModel Create(FakeAdb adb, FakeMirror? mirror = null, FakeUpdates? updates = null, FakeSettings? settings = null)
+    private static MainViewModel Create(FakeAdb adb, FakeMirror? mirror = null, FakeUpdates? updates = null,
+        FakeSettings? settings = null, TimeProvider? timeProvider = null, SynchronizationContext? uiContext = null)
     {
         var previous = SynchronizationContext.Current;
         try
         {
-            SynchronizationContext.SetSynchronizationContext(new ImmediateContext());
-            return new MainViewModel(new AppServices(adb, mirror ?? new FakeMirror(), settings ?? new FakeSettings(), new FakeDiagnostics(), updates ?? new FakeUpdates()));
+            SynchronizationContext.SetSynchronizationContext(uiContext ?? new ImmediateContext());
+            return new MainViewModel(new AppServices(adb, mirror ?? new FakeMirror(), settings ?? new FakeSettings(), new FakeDiagnostics(), updates ?? new FakeUpdates()), timeProvider);
         }
         finally { SynchronizationContext.SetSynchronizationContext(previous); }
     }
@@ -604,11 +618,13 @@ public sealed class MainViewModelBehaviorTests
 
     private sealed class FakeSettings : IAppSettingsStore
     {
+        public Exception? SaveFailure { get; set; }
         public AppSettings Settings { get; set; } = AppSettings.Default;
         public List<AppSettings> Saves { get; } = [];
         public Task<AppSettings> LoadAsync(CancellationToken cancellationToken = default) => Task.FromResult(Settings);
         public Task SaveAsync(AppSettings settings, CancellationToken cancellationToken = default)
         {
+            if (SaveFailure is not null) throw SaveFailure;
             Settings = settings;
             Saves.Add(settings);
             return Task.CompletedTask;

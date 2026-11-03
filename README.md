@@ -8,25 +8,25 @@
 
 ## 下载
 
-当前版本：`V1.9.0`
+当前预发布版本：`V2.0.0`（界面显示 `V2.0.0-2026.11.03`）
 
-- [GitHub Release](https://github.com/NingCui29/ADB-Mirror-Studio/releases/tag/V1.9.0)
-- [下载安装版（推荐）](https://github.com/NingCui29/ADB-Mirror-Studio/releases/download/V1.9.0/ADB-Mirror-Studio-Setup-V1.9.0-win-x64.exe)
-- [下载便携版](https://github.com/NingCui29/ADB-Mirror-Studio/releases/download/V1.9.0/AdbMirrorStudio-V1.9.0-win-x64.zip)
+- [GitHub Release](https://github.com/NingCui29/ADB-Mirror-Studio/releases/tag/V2.0.0)
+- [下载安装版（推荐）](https://github.com/NingCui29/ADB-Mirror-Studio/releases/download/V2.0.0/ADB-Mirror-Studio-Setup-V2.0.0-win-x64.exe)
+- [下载便携版](https://github.com/NingCui29/ADB-Mirror-Studio/releases/download/V2.0.0/AdbMirrorStudio-V2.0.0-win-x64.zip)
 
-SHA256：
-
-```text
-安装版  722DDF1367ECD74C3DD2306DC286B29752F1A016EB4E00BAFDC7CA0691673707
-便携版  07BC67749D8F8F67A1B54101BE3F85B2985D3BFBE83C8D545A0CAAE993DDC811
-```
+SHA256 见 [V2.0.0 发行说明](commercial/RELEASE-NOTES-V2.0.0.md)。
 
 ## 主要功能
 
+以下界面说明对应当前源码；已发布安装包的功能与界面以对应版本的发行说明为准。
+
 - USB、IPv4、IPv6 和主机名 ADB 连接
-- 固定设备栏与单一当前设备上下文；设备功能统一归入概览、屏幕、文件、应用和终端
-- 任务中心集中展示镜像会话、文件任务、录屏文件和多窗口排列
-- 设置中心集中管理外观、设备刷新、系统健康、更新与本地数据
+- 左侧统一放置目标设备、屏幕镜像、文件管理、应用管理和终端；底部提供任务中心与设置
+- 屏幕镜像合并启动操作、画质选择和性能监测；未选择设备时显示 USB 与无线连接引导
+- 镜像主按钮随当前设备会话显示“开始镜像”或“停止镜像”，录制路径收纳在“镜像设置”中
+- 内容标题栏提供截图与更多设备操作；设备详情、TCP/IP、重启和断开连接集中在更多菜单中
+- 任务中心集中展示镜像会话、文件任务、录屏文件和多窗口排列，屏幕镜像与文件管理提供直接入口
+- 设置集中管理外观、设备刷新、系统健康、更新与本地数据
 - 同一分发形态内单实例运行；重复启动会唤醒已有窗口
 - Android 11+ mDNS 发现与六位配对码无线配对
 - 记忆最近 10 个成功连接的无线地址，仅供手动选择，绝不自动重连
@@ -45,8 +45,9 @@ SHA256：
 - 无需读取应用列表，直接按 Android 包名确认卸载
 - 指定目标设备的内置 ADB Shell 控制台，不调用 Windows cmd.exe
 - ADB、scrcpy、mDNS 与 PATH 冲突诊断
-- WinUI 3、Desktop Acrylic、浅色/深色主题和 Per-Monitor V2 DPI 感知
-- 1500 px 以上使用宽屏双列，980–1499 px 使用单列，小于 980 px 时设备栏移动到内容上方
+- WinUI 3、基于 Material Design 色彩角色的天空蓝主题，中性背景突出主要操作和选中项；支持跟随系统、浅色/深色主题和 Per-Monitor V2 DPI 感知
+- 窗口宽度达到 1440 个逻辑像素时，文件与应用使用双列；性能指标在 1180 起使用四列。较窄时自动收拢，小于 900 时设备与导航栏移到内容上方
+- 成功提示以右下方浮层显示，5 秒后自动收起；错误、警告和处理中提示保留
 - 检测 GitHub 新版本，在校验文件名、大小和 SHA256 后下载并启动安装程序
 
 ## 系统要求
@@ -62,7 +63,7 @@ SHA256：
 
 ### 安装版
 
-1. 下载 `ADB-Mirror-Studio-Setup-V1.9.0-win-x64.exe`。
+1. 下载 `ADB-Mirror-Studio-Setup-V2.0.0-win-x64.exe`。
 2. 核对上方 SHA256 后运行安装程序。
 3. 从开始菜单打开 ADB Mirror Studio。
 
@@ -70,7 +71,7 @@ SHA256：
 
 ### 便携版
 
-1. 下载 `AdbMirrorStudio-V1.9.0-win-x64.zip`。
+1. 下载 `AdbMirrorStudio-V2.0.0-win-x64.zip`。
 2. 完整解压 ZIP，不要直接在压缩包中运行。
 3. 双击 `AdbMirrorStudio.App.exe`。
 
@@ -85,20 +86,20 @@ SHA256：
 1. 在手机中开启“开发者选项”和“USB 调试”。
 2. 使用支持数据传输的 USB 线连接电脑。
 3. 在手机端允许 USB 调试授权。
-4. 在左侧设备栏刷新并选择设备，再进入“屏幕”工作区启动镜像。
+4. 在左侧设备栏刷新并选择设备，再进入“屏幕镜像”启动镜像。
 
 ### Android 11+ 无线配对
 
 1. 打开手机“开发者选项 → 无线调试”。
 2. 选择“使用配对码配对设备”。
-3. 在设备栏的“添加设备 → 无线配对”中输入配对地址和六位配对码。
+3. 在设备栏的“连接设备 → 无线配对”中输入配对地址和六位配对码。
 4. 配对后使用无线调试主页面显示的连接地址手动连接。
 
 配对端口和连接端口通常不同。不要将 ADB 端口暴露到公网。
 
 ## 应用内更新
 
-检查到后续新版本时，“设置中心 → 更新”会提供“下载并安装”：
+检查到后续新版本时，“设置 → 更新”会提供“下载并安装”：
 
 1. 只接受固定 GitHub 仓库的 HTTPS Windows x64 安装包。
 2. 安装包名称必须与目标版本一致。
@@ -159,6 +160,8 @@ SHA256：
 
 ## 文档
 
+- [V2.0.0 发行说明](commercial/RELEASE-NOTES-V2.0.0.md)
+- [V2.0.0 发布验收](commercial/DEVICE-QA-V2.0.0.md)
 - [完整使用、开发和发布手册](commercial/README.md)
 - [V1.9.0 发行说明](commercial/RELEASE-NOTES-V1.9.0.md)
 - [V1.9.0 发布验收](commercial/DEVICE-QA-V1.9.0.md)

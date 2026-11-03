@@ -1,0 +1,733 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Material color roles for the focused sky-blue workbench.
+         Default is WinUI's dark theme. Native templates keep keyboard focus,
+         disabled states and accessibility behavior. -->
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+            <SolidColorBrush x:Key="SkyPrimaryBrush" Color="#087BBF" />
+            <SolidColorBrush x:Key="SkyOnPrimaryBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="SkyPrimaryHoverBrush" Color="#0671AF" />
+            <SolidColorBrush x:Key="SkyPrimaryPressedBrush" Color="#05669E" />
+            <SolidColorBrush x:Key="SkyPrimaryContainerBrush" Color="#DCEFFF" />
+            <SolidColorBrush x:Key="SkyOnPrimaryContainerBrush" Color="#075B8B" />
+            <SolidColorBrush x:Key="SkySecondaryContainerBrush" Color="#EBF1F7" />
+            <SolidColorBrush x:Key="SkyOnSecondaryContainerBrush" Color="#364E63" />
+            <SolidColorBrush x:Key="SkySurfaceBrush" Color="#F1F4F8" />
+            <SolidColorBrush x:Key="SkySurfaceContainerLowestBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="SkySurfaceContainerLowBrush" Color="#E7EDF4" />
+            <SolidColorBrush x:Key="SkySurfaceContainerBrush" Color="#EDF2F7" />
+            <SolidColorBrush x:Key="SkySurfaceContainerHighBrush" Color="#DDE6F0" />
+            <SolidColorBrush x:Key="SkyOnSurfaceBrush" Color="#1B2B3B" />
+            <SolidColorBrush x:Key="SkyOnSurfaceVariantBrush" Color="#637588" />
+            <SolidColorBrush x:Key="SkyOutlineBrush" Color="#60768C" />
+            <SolidColorBrush x:Key="SkyOutlineVariantBrush" Color="#BBC8D6" />
+            <!-- Structural dividers stay quieter than interactive outlines. -->
+            <SolidColorBrush x:Key="SkyControlOutlineBrush" Color="#77899B" />
+            <StaticResource x:Key="SkyPresetSelectedBorderBrush" ResourceKey="SkyPrimaryBrush" />
+            <SolidColorBrush x:Key="SkyErrorBrush" Color="#BA1A1A" />
+            <SolidColorBrush x:Key="SkyErrorContainerBrush" Color="#FFDAD6" />
+            <SolidColorBrush x:Key="SkyOnErrorContainerBrush" Color="#410002" />
+            <SolidColorBrush x:Key="SkySuccessBrush" Color="#25845B" />
+            <SolidColorBrush x:Key="SkySelectionHoverBrush" Color="#CCE7FB" />
+            <SolidColorBrush x:Key="SkySelectionPressedBrush" Color="#BCDDF5" />
+            <StaticResource x:Key="SkyTabActiveBrush" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="SkyPresetSelectedBrush" ResourceKey="SkySurfaceContainerLowestBrush" />
+            <StaticResource x:Key="SkyPresetSelectedForegroundBrush" ResourceKey="SkyPrimaryBrush" />
+            <Color x:Key="SystemAccentColor">#087BBF</Color>
+            <SolidColorBrush x:Key="SkyTransparentBrush" Color="Transparent" />
+            <StaticResource x:Key="AccentFillColorDefaultBrush" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="AccentTextFillColorPrimaryBrush" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="AccentTextFillColorSecondaryBrush" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="AccentTextFillColorTertiaryBrush" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="SystemControlHighlightAccentBrush" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="SystemControlForegroundAccentBrush" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="AccentButtonBackground" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="TextControlBorderBrushFocused" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="ComboBoxBorderBrushFocused" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="ProgressBarForeground" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="ProgressRingForegroundThemeBrush" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOn" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOnPointerOver" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOnPressed" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="NavigationViewSelectionIndicatorForeground" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="ListViewItemSelectionIndicatorBrush" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="ListViewItemSelectionIndicatorPointerOverBrush" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="ListViewItemSelectionIndicatorPressedBrush" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="AccentFillColorSecondaryBrush" ResourceKey="SkyPrimaryHoverBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundPointerOver" ResourceKey="SkyPrimaryHoverBrush" />
+            <StaticResource x:Key="AccentFillColorTertiaryBrush" ResourceKey="SkyPrimaryPressedBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundPressed" ResourceKey="SkyPrimaryPressedBrush" />
+            <StaticResource x:Key="TextOnAccentFillColorPrimaryBrush" ResourceKey="SkyOnPrimaryBrush" />
+            <StaticResource x:Key="TextOnAccentFillColorSecondaryBrush" ResourceKey="SkyOnPrimaryBrush" />
+            <StaticResource x:Key="AccentButtonForeground" ResourceKey="SkyOnPrimaryBrush" />
+            <StaticResource x:Key="AccentButtonForegroundPointerOver" ResourceKey="SkyOnPrimaryBrush" />
+            <StaticResource x:Key="AccentButtonForegroundPressed" ResourceKey="SkyOnPrimaryBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOn" ResourceKey="SkyOnPrimaryBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOnPointerOver" ResourceKey="SkyOnPrimaryBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOnPressed" ResourceKey="SkyOnPrimaryBrush" />
+            <StaticResource x:Key="NavigationViewItemBackgroundSelected" ResourceKey="SkyPrimaryContainerBrush" />
+            <StaticResource x:Key="NavigationViewItemBackgroundChecked" ResourceKey="SkyPrimaryContainerBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundSelected" ResourceKey="SkyPrimaryContainerBrush" />
+            <StaticResource x:Key="ListBoxItemBackgroundSelected" ResourceKey="SkyPrimaryContainerBrush" />
+            <StaticResource x:Key="ListBoxItemSelectedBackgroundThemeBrush" ResourceKey="SkyPrimaryContainerBrush" />
+            <StaticResource x:Key="SystemControlHighlightListAccentLowBrush" ResourceKey="SkyPrimaryContainerBrush" />
+            <StaticResource x:Key="NavigationViewItemBackgroundSelectedPointerOver" ResourceKey="SkySelectionHoverBrush" />
+            <StaticResource x:Key="NavigationViewItemBackgroundCheckedPointerOver" ResourceKey="SkySelectionHoverBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundSelectedPointerOver" ResourceKey="SkySelectionHoverBrush" />
+            <StaticResource x:Key="ListBoxItemBackgroundSelectedPointerOver" ResourceKey="SkySelectionHoverBrush" />
+            <StaticResource x:Key="ListBoxItemSelectedPointerOverBackgroundThemeBrush" ResourceKey="SkySelectionHoverBrush" />
+            <StaticResource x:Key="NavigationViewItemBackgroundSelectedPressed" ResourceKey="SkySelectionPressedBrush" />
+            <StaticResource x:Key="NavigationViewItemBackgroundCheckedPressed" ResourceKey="SkySelectionPressedBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundSelectedPressed" ResourceKey="SkySelectionPressedBrush" />
+            <StaticResource x:Key="ListBoxItemBackgroundSelectedPressed" ResourceKey="SkySelectionPressedBrush" />
+            <StaticResource x:Key="NavigationViewItemForegroundSelected" ResourceKey="SkyOnPrimaryContainerBrush" />
+            <StaticResource x:Key="NavigationViewItemForegroundSelectedPointerOver" ResourceKey="SkyOnPrimaryContainerBrush" />
+            <StaticResource x:Key="NavigationViewItemForegroundSelectedPressed" ResourceKey="SkyOnPrimaryContainerBrush" />
+            <StaticResource x:Key="NavigationViewItemForegroundChecked" ResourceKey="SkyOnPrimaryContainerBrush" />
+            <StaticResource x:Key="NavigationViewItemForegroundCheckedPointerOver" ResourceKey="SkyOnPrimaryContainerBrush" />
+            <StaticResource x:Key="NavigationViewItemForegroundCheckedPressed" ResourceKey="SkyOnPrimaryContainerBrush" />
+            <StaticResource x:Key="ListViewItemForegroundSelected" ResourceKey="SkyOnPrimaryContainerBrush" />
+            <StaticResource x:Key="ListViewItemForegroundSelectedPointerOver" ResourceKey="SkyOnPrimaryContainerBrush" />
+            <StaticResource x:Key="ListViewItemForegroundSelectedPressed" ResourceKey="SkyOnPrimaryContainerBrush" />
+            <StaticResource x:Key="NavigationViewContentBackground" ResourceKey="SkySurfaceBrush" />
+            <StaticResource x:Key="CardBackgroundFillColorDefaultBrush" ResourceKey="SkySurfaceContainerLowestBrush" />
+            <StaticResource x:Key="TextControlBackgroundFocused" ResourceKey="SkySurfaceContainerLowestBrush" />
+            <StaticResource x:Key="ComboBoxDropDownBackground" ResourceKey="SkySurfaceContainerLowestBrush" />
+            <StaticResource x:Key="ContentDialogBackground" ResourceKey="SkySurfaceContainerLowestBrush" />
+            <StaticResource x:Key="FlyoutPresenterBackground" ResourceKey="SkySurfaceContainerLowestBrush" />
+            <StaticResource x:Key="NavigationViewDefaultPaneBackground" ResourceKey="SkySurfaceContainerLowBrush" />
+            <StaticResource x:Key="NavigationViewExpandedPaneBackground" ResourceKey="SkySurfaceContainerLowBrush" />
+            <StaticResource x:Key="NavigationViewTopPaneBackground" ResourceKey="SkySurfaceContainerLowBrush" />
+            <StaticResource x:Key="TextControlBackground" ResourceKey="SkySurfaceContainerLowBrush" />
+            <StaticResource x:Key="ComboBoxBackground" ResourceKey="SkySurfaceContainerLowBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundFocused" ResourceKey="SkySurfaceContainerLowBrush" />
+            <StaticResource x:Key="ButtonBackground" ResourceKey="SkySurfaceContainerBrush" />
+            <StaticResource x:Key="CardBackgroundFillColorSecondaryBrush" ResourceKey="SkySurfaceContainerBrush" />
+            <StaticResource x:Key="TextControlBackgroundPointerOver" ResourceKey="SkySurfaceContainerBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundPointerOver" ResourceKey="SkySurfaceContainerBrush" />
+            <StaticResource x:Key="NavigationViewItemBackgroundPointerOver" ResourceKey="SkySurfaceContainerBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundPointerOver" ResourceKey="SkySurfaceContainerBrush" />
+            <StaticResource x:Key="ListBoxItemBackgroundPointerOver" ResourceKey="SkySurfaceContainerBrush" />
+            <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="SkySurfaceContainerHighBrush" />
+            <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="SkySurfaceContainerHighBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundPressed" ResourceKey="SkySurfaceContainerHighBrush" />
+            <StaticResource x:Key="NavigationViewItemBackgroundPressed" ResourceKey="SkySurfaceContainerHighBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundPressed" ResourceKey="SkySurfaceContainerHighBrush" />
+            <StaticResource x:Key="ListBoxItemBackgroundPressed" ResourceKey="SkySurfaceContainerHighBrush" />
+            <StaticResource x:Key="TextFillColorPrimaryBrush" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="ButtonForeground" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="ButtonForegroundPressed" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="TextControlForeground" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="TextControlForegroundPointerOver" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="TextControlForegroundFocused" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxForeground" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxForegroundPointerOver" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxForegroundPressed" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxForegroundFocused" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="NavigationViewItemForeground" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="NavigationViewItemForegroundPointerOver" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="NavigationViewItemForegroundPressed" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="ListViewItemForeground" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="ListViewItemForegroundPointerOver" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="ListViewItemForegroundPressed" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="ListBoxForeground" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="ListBoxItemForeground" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="TextFillColorSecondaryBrush" ResourceKey="SkyOnSurfaceVariantBrush" />
+            <StaticResource x:Key="TextFillColorTertiaryBrush" ResourceKey="SkyOnSurfaceVariantBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForeground" ResourceKey="SkyOnSurfaceVariantBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForegroundPointerOver" ResourceKey="SkyOnSurfaceVariantBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForegroundFocused" ResourceKey="SkyOnSurfaceVariantBrush" />
+            <StaticResource x:Key="TextControlBorderBrushPointerOver" ResourceKey="SkyOutlineBrush" />
+            <StaticResource x:Key="ComboBoxBorderBrushPointerOver" ResourceKey="SkyOutlineBrush" />
+            <StaticResource x:Key="CardStrokeColorDefaultBrush" ResourceKey="SkyOutlineVariantBrush" />
+            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="SkyControlOutlineBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="SkyOutlineBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="TextControlBorderBrush" ResourceKey="SkyControlOutlineBrush" />
+            <StaticResource x:Key="ComboBoxBorderBrush" ResourceKey="SkyControlOutlineBrush" />
+            <StaticResource x:Key="ContentDialogBorderBrush" ResourceKey="SkyOutlineVariantBrush" />
+            <StaticResource x:Key="FlyoutPresenterBorderBrush" ResourceKey="SkyOutlineVariantBrush" />
+            <StaticResource x:Key="AccentButtonBorderBrush" ResourceKey="SkyTransparentBrush" />
+            <StaticResource x:Key="AccentButtonBorderBrushPointerOver" ResourceKey="SkyTransparentBrush" />
+            <StaticResource x:Key="AccentButtonBorderBrushPressed" ResourceKey="SkyTransparentBrush" />
+            <StaticResource x:Key="NavigationViewContentGridBorderBrush" ResourceKey="SkyTransparentBrush" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Default">
+            <SolidColorBrush x:Key="SkyPrimaryBrush" Color="#8BCEFF" />
+            <SolidColorBrush x:Key="SkyOnPrimaryBrush" Color="#05334E" />
+            <SolidColorBrush x:Key="SkyPrimaryHoverBrush" Color="#A3D8FF" />
+            <SolidColorBrush x:Key="SkyPrimaryPressedBrush" Color="#BAE2FF" />
+            <SolidColorBrush x:Key="SkyPrimaryContainerBrush" Color="#163C56" />
+            <SolidColorBrush x:Key="SkyOnPrimaryContainerBrush" Color="#B9E3FF" />
+            <SolidColorBrush x:Key="SkySecondaryContainerBrush" Color="#2A3B4B" />
+            <SolidColorBrush x:Key="SkyOnSecondaryContainerBrush" Color="#C9DCEB" />
+            <SolidColorBrush x:Key="SkySurfaceBrush" Color="#111820" />
+            <SolidColorBrush x:Key="SkySurfaceContainerLowestBrush" Color="#1A242F" />
+            <SolidColorBrush x:Key="SkySurfaceContainerLowBrush" Color="#151E28" />
+            <SolidColorBrush x:Key="SkySurfaceContainerBrush" Color="#202D3A" />
+            <SolidColorBrush x:Key="SkySurfaceContainerHighBrush" Color="#2A3948" />
+            <SolidColorBrush x:Key="SkyOnSurfaceBrush" Color="#E4EDF6" />
+            <SolidColorBrush x:Key="SkyOnSurfaceVariantBrush" Color="#A5B6C7" />
+            <SolidColorBrush x:Key="SkyOutlineBrush" Color="#7890A6" />
+            <SolidColorBrush x:Key="SkyOutlineVariantBrush" Color="#2C3947" />
+            <StaticResource x:Key="SkyControlOutlineBrush" ResourceKey="SkyOutlineVariantBrush" />
+            <SolidColorBrush x:Key="SkyPresetSelectedBorderBrush" Color="Transparent" />
+            <SolidColorBrush x:Key="SkyErrorBrush" Color="#FFB4AB" />
+            <SolidColorBrush x:Key="SkyErrorContainerBrush" Color="#93000A" />
+            <SolidColorBrush x:Key="SkyOnErrorContainerBrush" Color="#FFDAD6" />
+            <SolidColorBrush x:Key="SkySuccessBrush" Color="#6ED7A6" />
+            <SolidColorBrush x:Key="SkySelectionHoverBrush" Color="#204B68" />
+            <SolidColorBrush x:Key="SkySelectionPressedBrush" Color="#295B7C" />
+            <StaticResource x:Key="SkyTabActiveBrush" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="SkyPresetSelectedBrush" ResourceKey="SkySurfaceContainerLowestBrush" />
+            <StaticResource x:Key="SkyPresetSelectedForegroundBrush" ResourceKey="SkyPrimaryBrush" />
+            <Color x:Key="SystemAccentColor">#8BCEFF</Color>
+            <SolidColorBrush x:Key="SkyTransparentBrush" Color="Transparent" />
+            <StaticResource x:Key="AccentFillColorDefaultBrush" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="AccentTextFillColorPrimaryBrush" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="AccentTextFillColorSecondaryBrush" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="AccentTextFillColorTertiaryBrush" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="SystemControlHighlightAccentBrush" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="SystemControlForegroundAccentBrush" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="AccentButtonBackground" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="TextControlBorderBrushFocused" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="ComboBoxBorderBrushFocused" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="ProgressBarForeground" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="ProgressRingForegroundThemeBrush" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOn" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOnPointerOver" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOnPressed" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="NavigationViewSelectionIndicatorForeground" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="ListViewItemSelectionIndicatorBrush" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="ListViewItemSelectionIndicatorPointerOverBrush" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="ListViewItemSelectionIndicatorPressedBrush" ResourceKey="SkyPrimaryBrush" />
+            <StaticResource x:Key="AccentFillColorSecondaryBrush" ResourceKey="SkyPrimaryHoverBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundPointerOver" ResourceKey="SkyPrimaryHoverBrush" />
+            <StaticResource x:Key="AccentFillColorTertiaryBrush" ResourceKey="SkyPrimaryPressedBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundPressed" ResourceKey="SkyPrimaryPressedBrush" />
+            <StaticResource x:Key="TextOnAccentFillColorPrimaryBrush" ResourceKey="SkyOnPrimaryBrush" />
+            <StaticResource x:Key="TextOnAccentFillColorSecondaryBrush" ResourceKey="SkyOnPrimaryBrush" />
+            <StaticResource x:Key="AccentButtonForeground" ResourceKey="SkyOnPrimaryBrush" />
+            <StaticResource x:Key="AccentButtonForegroundPointerOver" ResourceKey="SkyOnPrimaryBrush" />
+            <StaticResource x:Key="AccentButtonForegroundPressed" ResourceKey="SkyOnPrimaryBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOn" ResourceKey="SkyOnPrimaryBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOnPointerOver" ResourceKey="SkyOnPrimaryBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOnPressed" ResourceKey="SkyOnPrimaryBrush" />
+            <StaticResource x:Key="NavigationViewItemBackgroundSelected" ResourceKey="SkyPrimaryContainerBrush" />
+            <StaticResource x:Key="NavigationViewItemBackgroundChecked" ResourceKey="SkyPrimaryContainerBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundSelected" ResourceKey="SkyPrimaryContainerBrush" />
+            <StaticResource x:Key="ListBoxItemBackgroundSelected" ResourceKey="SkyPrimaryContainerBrush" />
+            <StaticResource x:Key="ListBoxItemSelectedBackgroundThemeBrush" ResourceKey="SkyPrimaryContainerBrush" />
+            <StaticResource x:Key="SystemControlHighlightListAccentLowBrush" ResourceKey="SkyPrimaryContainerBrush" />
+            <StaticResource x:Key="NavigationViewItemBackgroundSelectedPointerOver" ResourceKey="SkySelectionHoverBrush" />
+            <StaticResource x:Key="NavigationViewItemBackgroundCheckedPointerOver" ResourceKey="SkySelectionHoverBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundSelectedPointerOver" ResourceKey="SkySelectionHoverBrush" />
+            <StaticResource x:Key="ListBoxItemBackgroundSelectedPointerOver" ResourceKey="SkySelectionHoverBrush" />
+            <StaticResource x:Key="ListBoxItemSelectedPointerOverBackgroundThemeBrush" ResourceKey="SkySelectionHoverBrush" />
+            <StaticResource x:Key="NavigationViewItemBackgroundSelectedPressed" ResourceKey="SkySelectionPressedBrush" />
+            <StaticResource x:Key="NavigationViewItemBackgroundCheckedPressed" ResourceKey="SkySelectionPressedBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundSelectedPressed" ResourceKey="SkySelectionPressedBrush" />
+            <StaticResource x:Key="ListBoxItemBackgroundSelectedPressed" ResourceKey="SkySelectionPressedBrush" />
+            <StaticResource x:Key="NavigationViewItemForegroundSelected" ResourceKey="SkyOnPrimaryContainerBrush" />
+            <StaticResource x:Key="NavigationViewItemForegroundSelectedPointerOver" ResourceKey="SkyOnPrimaryContainerBrush" />
+            <StaticResource x:Key="NavigationViewItemForegroundSelectedPressed" ResourceKey="SkyOnPrimaryContainerBrush" />
+            <StaticResource x:Key="NavigationViewItemForegroundChecked" ResourceKey="SkyOnPrimaryContainerBrush" />
+            <StaticResource x:Key="NavigationViewItemForegroundCheckedPointerOver" ResourceKey="SkyOnPrimaryContainerBrush" />
+            <StaticResource x:Key="NavigationViewItemForegroundCheckedPressed" ResourceKey="SkyOnPrimaryContainerBrush" />
+            <StaticResource x:Key="ListViewItemForegroundSelected" ResourceKey="SkyOnPrimaryContainerBrush" />
+            <StaticResource x:Key="ListViewItemForegroundSelectedPointerOver" ResourceKey="SkyOnPrimaryContainerBrush" />
+            <StaticResource x:Key="ListViewItemForegroundSelectedPressed" ResourceKey="SkyOnPrimaryContainerBrush" />
+            <StaticResource x:Key="NavigationViewContentBackground" ResourceKey="SkySurfaceBrush" />
+            <StaticResource x:Key="CardBackgroundFillColorDefaultBrush" ResourceKey="SkySurfaceContainerLowestBrush" />
+            <StaticResource x:Key="TextControlBackgroundFocused" ResourceKey="SkySurfaceContainerLowestBrush" />
+            <StaticResource x:Key="ComboBoxDropDownBackground" ResourceKey="SkySurfaceContainerLowestBrush" />
+            <StaticResource x:Key="ContentDialogBackground" ResourceKey="SkySurfaceContainerLowestBrush" />
+            <StaticResource x:Key="FlyoutPresenterBackground" ResourceKey="SkySurfaceContainerLowestBrush" />
+            <StaticResource x:Key="NavigationViewDefaultPaneBackground" ResourceKey="SkySurfaceContainerLowBrush" />
+            <StaticResource x:Key="NavigationViewExpandedPaneBackground" ResourceKey="SkySurfaceContainerLowBrush" />
+            <StaticResource x:Key="NavigationViewTopPaneBackground" ResourceKey="SkySurfaceContainerLowBrush" />
+            <StaticResource x:Key="TextControlBackground" ResourceKey="SkySurfaceContainerLowBrush" />
+            <StaticResource x:Key="ComboBoxBackground" ResourceKey="SkySurfaceContainerLowBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundFocused" ResourceKey="SkySurfaceContainerLowBrush" />
+            <StaticResource x:Key="ButtonBackground" ResourceKey="SkySurfaceContainerBrush" />
+            <StaticResource x:Key="CardBackgroundFillColorSecondaryBrush" ResourceKey="SkySurfaceContainerBrush" />
+            <StaticResource x:Key="TextControlBackgroundPointerOver" ResourceKey="SkySurfaceContainerBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundPointerOver" ResourceKey="SkySurfaceContainerBrush" />
+            <StaticResource x:Key="NavigationViewItemBackgroundPointerOver" ResourceKey="SkySurfaceContainerBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundPointerOver" ResourceKey="SkySurfaceContainerBrush" />
+            <StaticResource x:Key="ListBoxItemBackgroundPointerOver" ResourceKey="SkySurfaceContainerBrush" />
+            <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="SkySurfaceContainerHighBrush" />
+            <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="SkySurfaceContainerHighBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundPressed" ResourceKey="SkySurfaceContainerHighBrush" />
+            <StaticResource x:Key="NavigationViewItemBackgroundPressed" ResourceKey="SkySurfaceContainerHighBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundPressed" ResourceKey="SkySurfaceContainerHighBrush" />
+            <StaticResource x:Key="ListBoxItemBackgroundPressed" ResourceKey="SkySurfaceContainerHighBrush" />
+            <StaticResource x:Key="TextFillColorPrimaryBrush" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="ButtonForeground" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="ButtonForegroundPressed" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="TextControlForeground" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="TextControlForegroundPointerOver" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="TextControlForegroundFocused" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxForeground" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxForegroundPointerOver" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxForegroundPressed" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxForegroundFocused" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="NavigationViewItemForeground" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="NavigationViewItemForegroundPointerOver" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="NavigationViewItemForegroundPressed" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="ListViewItemForeground" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="ListViewItemForegroundPointerOver" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="ListViewItemForegroundPressed" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="ListBoxForeground" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="ListBoxItemForeground" ResourceKey="SkyOnSurfaceBrush" />
+            <StaticResource x:Key="TextFillColorSecondaryBrush" ResourceKey="SkyOnSurfaceVariantBrush" />
+            <StaticResource x:Key="TextFillColorTertiaryBrush" ResourceKey="SkyOnSurfaceVariantBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForeground" ResourceKey="SkyOnSurfaceVariantBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForegroundPointerOver" ResourceKey="SkyOnSurfaceVariantBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForegroundFocused" ResourceKey="SkyOnSurfaceVariantBrush" />
+            <StaticResource x:Key="TextControlBorderBrushPointerOver" ResourceKey="SkyOutlineBrush" />
+            <StaticResource x:Key="ComboBoxBorderBrushPointerOver" ResourceKey="SkyOutlineBrush" />
+            <StaticResource x:Key="CardStrokeColorDefaultBrush" ResourceKey="SkyOutlineVariantBrush" />
+            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="SkyOutlineVariantBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="SkyOutlineVariantBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="SkyOutlineVariantBrush" />
+            <StaticResource x:Key="TextControlBorderBrush" ResourceKey="SkyOutlineVariantBrush" />
+            <StaticResource x:Key="ComboBoxBorderBrush" ResourceKey="SkyOutlineVariantBrush" />
+            <StaticResource x:Key="ContentDialogBorderBrush" ResourceKey="SkyOutlineVariantBrush" />
+            <StaticResource x:Key="FlyoutPresenterBorderBrush" ResourceKey="SkyOutlineVariantBrush" />
+            <StaticResource x:Key="AccentButtonBorderBrush" ResourceKey="SkyTransparentBrush" />
+            <StaticResource x:Key="AccentButtonBorderBrushPointerOver" ResourceKey="SkyTransparentBrush" />
+            <StaticResource x:Key="AccentButtonBorderBrushPressed" ResourceKey="SkyTransparentBrush" />
+            <StaticResource x:Key="NavigationViewContentGridBorderBrush" ResourceKey="SkyTransparentBrush" />
+        </ResourceDictionary>
+        <!-- High contrast follows the user's Windows palette; native control
+             theme resources intentionally retain their system definitions. -->
+        <ResourceDictionary x:Key="HighContrast">
+            <SolidColorBrush x:Key="SkyPrimaryBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="SkyOnPrimaryBrush" Color="{ThemeResource SystemColorHighlightTextColor}" />
+            <SolidColorBrush x:Key="SkyPrimaryHoverBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="SkyPrimaryPressedBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="SkyPrimaryContainerBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="SkyOnPrimaryContainerBrush" Color="{ThemeResource SystemColorHighlightTextColor}" />
+            <SolidColorBrush x:Key="SkySecondaryContainerBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+            <SolidColorBrush x:Key="SkyOnSecondaryContainerBrush" Color="{ThemeResource SystemColorButtonTextColor}" />
+            <SolidColorBrush x:Key="SkySurfaceBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="SkySurfaceContainerLowestBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="SkySurfaceContainerLowBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="SkySurfaceContainerBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="SkySurfaceContainerHighBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="SkyOnSurfaceBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="SkyOnSurfaceVariantBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="SkyOutlineBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="SkyOutlineVariantBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <StaticResource x:Key="SkyControlOutlineBrush" ResourceKey="SkyOutlineVariantBrush" />
+            <SolidColorBrush x:Key="SkyPresetSelectedBorderBrush" Color="Transparent" />
+            <SolidColorBrush x:Key="SkyErrorBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="SkyErrorContainerBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="SkyOnErrorContainerBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="SkySuccessBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="SkySelectionHoverBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="SkySelectionPressedBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="SkyTabActiveBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <StaticResource x:Key="SkyPresetSelectedBrush" ResourceKey="SkyPrimaryContainerBrush" />
+            <StaticResource x:Key="SkyPresetSelectedForegroundBrush" ResourceKey="SkyOnPrimaryContainerBrush" />
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+
+    <CornerRadius x:Key="ControlCornerRadius">10</CornerRadius>
+    <CornerRadius x:Key="OverlayCornerRadius">16</CornerRadius>
+    <CornerRadius x:Key="ListViewItemCornerRadius">10</CornerRadius>
+    <CornerRadius x:Key="NavigationViewContentGridCornerRadius">0</CornerRadius>
+    <Thickness x:Key="NavigationViewContentGridBorderThickness">0</Thickness>
+    <x:Double x:Key="NavigationViewTopPaneHeight">48</x:Double>
+
+    <Style x:Key="MaterialFilledButtonStyle" TargetType="Button" BasedOn="{StaticResource AccentButtonStyle}">
+        <Setter Property="MinHeight" Value="40" />
+        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+    </Style>
+    <Style x:Key="MaterialOutlinedButtonStyle" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+        <Setter Property="MinHeight" Value="36" />
+        <Setter Property="Padding" Value="14,7" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{ThemeResource SkyOnSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource SkyControlOutlineBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="Normal" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+    </Style>
+    <Style x:Key="MaterialTonalButtonStyle" TargetType="Button" BasedOn="{StaticResource MaterialOutlinedButtonStyle}">
+        <Setter Property="Background" Value="{ThemeResource SkySurfaceContainerLowBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource SkyOnSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style x:Key="MaterialTextButtonStyle" TargetType="Button" BasedOn="{StaticResource MaterialOutlinedButtonStyle}">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{ThemeResource SkyPrimaryBrush}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Padding" Value="12,8" />
+    </Style>
+    <Style x:Key="MaterialIconButtonStyle" TargetType="Button" BasedOn="{StaticResource MaterialTonalButtonStyle}">
+        <Setter Property="Width" Value="36" />
+        <Setter Property="Height" Value="36" />
+        <Setter Property="MinHeight" Value="36" />
+        <Setter Property="Padding" Value="8" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{ThemeResource SkyOnSurfaceVariantBrush}" />
+    </Style>
+    <Style TargetType="Button" BasedOn="{StaticResource MaterialOutlinedButtonStyle}" />
+
+    <!-- Single-selection workspace controls. The expanded item templates avoid
+         ListViewItemPresenter's separate square selection surface. The item
+         keeps its native automation peer, selection and system focus visuals. -->
+    <Style x:Key="MaterialWorkspaceTabStyle" TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
+        <Setter Property="Height" Value="42" />
+        <Setter Property="MinHeight" Value="42" />
+        <Setter Property="MinWidth" Value="80" />
+        <Setter Property="Padding" Value="20,0" />
+        <Setter Property="Margin" Value="0" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{ThemeResource SkyOnSurfaceVariantBrush}" />
+        <Setter Property="FontWeight" Value="Normal" />
+        <Setter Property="CornerRadius" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="FocusVisualMargin" Value="2" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListViewItem">
+                    <Grid x:Name="ItemRoot" Background="{TemplateBinding Background}"
+                          CornerRadius="{TemplateBinding CornerRadius}"
+                          Control.IsTemplateFocusTarget="True"
+                          FocusVisualMargin="{TemplateBinding FocusVisualMargin}"
+                          FocusVisualPrimaryBrush="{TemplateBinding FocusVisualPrimaryBrush}"
+                          FocusVisualPrimaryThickness="{TemplateBinding FocusVisualPrimaryThickness}"
+                          FocusVisualSecondaryBrush="{TemplateBinding FocusVisualSecondaryBrush}"
+                          FocusVisualSecondaryThickness="{TemplateBinding FocusVisualSecondaryThickness}">
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal"></VisualState>
+                                <VisualState x:Name="PointerOver">
+                                    <VisualState.Setters>
+                                        <Setter Target="ItemRoot.Background" Value="{ThemeResource SkySurfaceContainerLowBrush}" />
+                                        <Setter Target="ItemContent.Foreground" Value="{ThemeResource SkyOnSurfaceBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Pressed">
+                                    <VisualState.Setters>
+                                        <Setter Target="ItemRoot.Background" Value="{ThemeResource SkySurfaceContainerBrush}" />
+                                        <Setter Target="ItemContent.Foreground" Value="{ThemeResource SkyOnSurfaceBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Selected">
+                                    <VisualState.Setters>
+                                        <Setter Target="ItemContent.Foreground" Value="{ThemeResource SkyTabActiveBrush}" />
+                                        <Setter Target="ItemContent.FontWeight" Value="SemiBold" />
+                                        <Setter Target="SelectionUnderline.Opacity" Value="1" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="PointerOverSelected">
+                                    <VisualState.Setters>
+                                        <Setter Target="ItemRoot.Background" Value="{ThemeResource SkySurfaceContainerLowBrush}" />
+                                        <Setter Target="ItemContent.Foreground" Value="{ThemeResource SkyTabActiveBrush}" />
+                                        <Setter Target="ItemContent.FontWeight" Value="SemiBold" />
+                                        <Setter Target="SelectionUnderline.Opacity" Value="1" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="PressedSelected">
+                                    <VisualState.Setters>
+                                        <Setter Target="ItemRoot.Background" Value="{ThemeResource SkySurfaceContainerBrush}" />
+                                        <Setter Target="ItemContent.Foreground" Value="{ThemeResource SkyTabActiveBrush}" />
+                                        <Setter Target="ItemContent.FontWeight" Value="SemiBold" />
+                                        <Setter Target="SelectionUnderline.Opacity" Value="1" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                            </VisualStateGroup>
+                            <VisualStateGroup x:Name="DisabledStates">
+                                <VisualState x:Name="Enabled" />
+                                <VisualState x:Name="Disabled">
+                                    <VisualState.Setters>
+                                        <Setter Target="ItemRoot.Opacity" Value="{ThemeResource ListViewItemDisabledThemeOpacity}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <ContentPresenter x:Name="ItemContent"
+                                          Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          ContentTemplateSelector="{TemplateBinding ContentTemplateSelector}"
+                                          ContentTransitions="{TemplateBinding ContentTransitions}"
+                                          Foreground="{TemplateBinding Foreground}"
+                                          FontFamily="{TemplateBinding FontFamily}"
+                                          FontSize="{TemplateBinding FontSize}"
+                                          FontWeight="{TemplateBinding FontWeight}"
+                                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          Padding="{TemplateBinding Padding}"
+                                          AutomationProperties.AccessibilityView="Raw" />
+                        <Border x:Name="SelectionUnderline" Height="2" Margin="20,0"
+                                VerticalAlignment="Bottom" Background="{ThemeResource SkyTabActiveBrush}"
+                                Opacity="0" IsHitTestVisible="False" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="MaterialDeviceItemStyle" TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
+        <Setter Property="MinHeight" Value="60" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Margin" Value="0,0,0,4" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{ThemeResource SkyOnSurfaceBrush}" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="FocusVisualMargin" Value="2" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListViewItem">
+                    <Grid x:Name="ItemRoot" Background="{TemplateBinding Background}"
+                          CornerRadius="{TemplateBinding CornerRadius}"
+                          Control.IsTemplateFocusTarget="True"
+                          FocusVisualMargin="{TemplateBinding FocusVisualMargin}"
+                          FocusVisualPrimaryBrush="{TemplateBinding FocusVisualPrimaryBrush}"
+                          FocusVisualPrimaryThickness="{TemplateBinding FocusVisualPrimaryThickness}"
+                          FocusVisualSecondaryBrush="{TemplateBinding FocusVisualSecondaryBrush}"
+                          FocusVisualSecondaryThickness="{TemplateBinding FocusVisualSecondaryThickness}">
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal"></VisualState>
+                                <VisualState x:Name="PointerOver">
+                                    <VisualState.Setters>
+                                        <Setter Target="ItemRoot.Background" Value="{ThemeResource SkySurfaceContainerBrush}" />
+                                        <Setter Target="ItemContent.Foreground" Value="{ThemeResource SkyOnSurfaceBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Pressed">
+                                    <VisualState.Setters>
+                                        <Setter Target="ItemRoot.Background" Value="{ThemeResource SkySurfaceContainerHighBrush}" />
+                                        <Setter Target="ItemContent.Foreground" Value="{ThemeResource SkyOnSurfaceBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Selected">
+                                    <VisualState.Setters>
+                                        <Setter Target="ItemRoot.Background" Value="{ThemeResource SkyPrimaryContainerBrush}" />
+                                        <Setter Target="ItemContent.Foreground" Value="{ThemeResource SkyOnPrimaryContainerBrush}" />
+                                        <Setter Target="ItemContent.FontWeight" Value="SemiBold" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="PointerOverSelected">
+                                    <VisualState.Setters>
+                                        <Setter Target="ItemRoot.Background" Value="{ThemeResource SkySelectionHoverBrush}" />
+                                        <Setter Target="ItemContent.Foreground" Value="{ThemeResource SkyOnPrimaryContainerBrush}" />
+                                        <Setter Target="ItemContent.FontWeight" Value="SemiBold" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="PressedSelected">
+                                    <VisualState.Setters>
+                                        <Setter Target="ItemRoot.Background" Value="{ThemeResource SkySelectionPressedBrush}" />
+                                        <Setter Target="ItemContent.Foreground" Value="{ThemeResource SkyOnPrimaryContainerBrush}" />
+                                        <Setter Target="ItemContent.FontWeight" Value="SemiBold" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                            </VisualStateGroup>
+                            <VisualStateGroup x:Name="DisabledStates">
+                                <VisualState x:Name="Enabled" />
+                                <VisualState x:Name="Disabled">
+                                    <VisualState.Setters>
+                                        <Setter Target="ItemRoot.Opacity" Value="{ThemeResource ListViewItemDisabledThemeOpacity}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <ContentPresenter x:Name="ItemContent"
+                                          Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          ContentTemplateSelector="{TemplateBinding ContentTemplateSelector}"
+                                          ContentTransitions="{TemplateBinding ContentTransitions}"
+                                          Foreground="{TemplateBinding Foreground}"
+                                          FontFamily="{TemplateBinding FontFamily}"
+                                          FontSize="{TemplateBinding FontSize}"
+                                          FontWeight="{TemplateBinding FontWeight}"
+                                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          Padding="{TemplateBinding Padding}"
+                                          AutomationProperties.AccessibilityView="Raw" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Rail items share the device template's rounded selection surface,
+         automation peer, keyboard selection and system focus visuals. -->
+    <Style x:Key="MaterialRailNavigationItemStyle" TargetType="ListViewItem" BasedOn="{StaticResource MaterialDeviceItemStyle}">
+        <Setter Property="MinHeight" Value="42" />
+        <Setter Property="Padding" Value="12,9" />
+        <Setter Property="Margin" Value="0,0,0,4" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="Normal" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+
+    <Style x:Key="MaterialPresetItemStyle" TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
+        <Setter Property="MinHeight" Value="36" />
+        <Setter Property="MinWidth" Value="56" />
+        <Setter Property="Padding" Value="12,6" />
+        <Setter Property="Margin" Value="2" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{ThemeResource SkyOnSurfaceVariantBrush}" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="Normal" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="FocusVisualMargin" Value="2" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListViewItem">
+                    <Grid x:Name="ItemRoot" Background="{TemplateBinding Background}"
+                          CornerRadius="{TemplateBinding CornerRadius}"
+                          Control.IsTemplateFocusTarget="True"
+                          FocusVisualMargin="{TemplateBinding FocusVisualMargin}"
+                          FocusVisualPrimaryBrush="{TemplateBinding FocusVisualPrimaryBrush}"
+                          FocusVisualPrimaryThickness="{TemplateBinding FocusVisualPrimaryThickness}"
+                          FocusVisualSecondaryBrush="{TemplateBinding FocusVisualSecondaryBrush}"
+                          FocusVisualSecondaryThickness="{TemplateBinding FocusVisualSecondaryThickness}">
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal" />
+                                <VisualState x:Name="PointerOver">
+                                    <VisualState.Setters>
+                                        <Setter Target="ItemRoot.Background" Value="{ThemeResource SkySurfaceContainerHighBrush}" />
+                                        <Setter Target="ItemContent.Foreground" Value="{ThemeResource SkyOnSurfaceBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Pressed">
+                                    <VisualState.Setters>
+                                        <Setter Target="ItemRoot.Background" Value="{ThemeResource SkyPrimaryContainerBrush}" />
+                                        <Setter Target="ItemContent.Foreground" Value="{ThemeResource SkyOnPrimaryContainerBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Selected">
+                                    <VisualState.Setters>
+                                        <Setter Target="ItemRoot.Background" Value="{ThemeResource SkyPresetSelectedBrush}" />
+                                        <Setter Target="ItemContent.Foreground" Value="{ThemeResource SkyPresetSelectedForegroundBrush}" />
+                                        <Setter Target="ItemContent.FontWeight" Value="SemiBold" />
+                                        <Setter Target="SelectionOutline.BorderBrush" Value="{ThemeResource SkyPresetSelectedBorderBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="PointerOverSelected">
+                                    <VisualState.Setters>
+                                        <Setter Target="ItemRoot.Background" Value="{ThemeResource SkyPresetSelectedBrush}" />
+                                        <Setter Target="ItemContent.Foreground" Value="{ThemeResource SkyPresetSelectedForegroundBrush}" />
+                                        <Setter Target="ItemContent.FontWeight" Value="SemiBold" />
+                                        <Setter Target="SelectionOutline.BorderBrush" Value="{ThemeResource SkyPresetSelectedBorderBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="PressedSelected">
+                                    <VisualState.Setters>
+                                        <Setter Target="ItemRoot.Background" Value="{ThemeResource SkyPrimaryContainerBrush}" />
+                                        <Setter Target="ItemContent.Foreground" Value="{ThemeResource SkyOnPrimaryContainerBrush}" />
+                                        <Setter Target="ItemContent.FontWeight" Value="SemiBold" />
+                                        <Setter Target="SelectionOutline.BorderBrush" Value="{ThemeResource SkyPresetSelectedBorderBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                            </VisualStateGroup>
+                            <VisualStateGroup x:Name="DisabledStates">
+                                <VisualState x:Name="Enabled" />
+                                <VisualState x:Name="Disabled">
+                                    <VisualState.Setters>
+                                        <Setter Target="ItemRoot.Opacity" Value="{ThemeResource ListViewItemDisabledThemeOpacity}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <ContentPresenter x:Name="ItemContent"
+                                          Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          ContentTemplateSelector="{TemplateBinding ContentTemplateSelector}"
+                                          ContentTransitions="{TemplateBinding ContentTransitions}"
+                                          Foreground="{TemplateBinding Foreground}"
+                                          FontFamily="{TemplateBinding FontFamily}"
+                                          FontSize="{TemplateBinding FontSize}"
+                                          FontWeight="{TemplateBinding FontWeight}"
+                                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          Padding="{TemplateBinding Padding}"
+                                          AutomationProperties.AccessibilityView="Raw" />
+                        <!-- Overlay keeps the selected boundary crisp without changing item size. -->
+                        <Border x:Name="SelectionOutline" BorderThickness="1" BorderBrush="Transparent"
+                                CornerRadius="{TemplateBinding CornerRadius}" IsHitTestVisible="False"
+                                AutomationProperties.AccessibilityView="Raw" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+
+    <Style TargetType="TextBox" BasedOn="{StaticResource DefaultTextBoxStyle}">
+        <Setter Property="MinHeight" Value="40" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="CornerRadius" Value="10" />
+    </Style>
+    <Style TargetType="PasswordBox" BasedOn="{StaticResource DefaultPasswordBoxStyle}">
+        <Setter Property="MinHeight" Value="40" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="CornerRadius" Value="10" />
+    </Style>
+    <Style TargetType="ComboBox" BasedOn="{StaticResource DefaultComboBoxStyle}">
+        <Setter Property="MinHeight" Value="40" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="CornerRadius" Value="10" />
+    </Style>
+
+    <Style x:Key="MaterialCardStyle" TargetType="Border">
+        <Setter Property="Padding" Value="20" />
+        <Setter Property="CornerRadius" Value="16" />
+        <Setter Property="Background" Value="{ThemeResource SkySurfaceContainerLowestBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource SkyOutlineVariantBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style x:Key="MaterialSectionTitleStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{ThemeResource SkyOnSurfaceBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style x:Key="MaterialBodyStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="LineHeight" Value="20" />
+        <Setter Property="Foreground" Value="{ThemeResource SkyOnSurfaceBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style x:Key="MaterialCaptionStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="LineHeight" Value="18" />
+        <Setter Property="Foreground" Value="{ThemeResource SkyOnSurfaceVariantBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+</ResourceDictionary>
+

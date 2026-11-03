@@ -35,5 +35,6 @@ namespace AdbMirrorStudio.App
     internal static class AppVersionInfo
     {
         public const string ProductVersion = "V1.0.0";
+        public const string DisplayVersion = "V1.0.0-2026.11.03";
     }
 }

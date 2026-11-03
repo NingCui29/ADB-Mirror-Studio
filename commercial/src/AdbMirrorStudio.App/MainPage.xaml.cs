@@ -1,6 +1,7 @@
 using AdbMirrorStudio.App.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Navigation;
 using Windows.Storage.Pickers;
 using Windows.Storage;
@@ -16,48 +17,52 @@ public sealed partial class MainPage : Page
     private readonly DispatcherTimer _performanceTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private bool _initializingSettings;
     private bool _shutdown;
+    private bool _synchronizingNavigation;
+    private string _selectedSection = "screen";
     public MainViewModel? ViewModel { get; private set; }
 
     public MainPage()
     {
         InitializeComponent();
+        SelectSection("screen");
         _autoRefreshTimer.Tick += AutoRefreshTimer_Tick;
         _performanceTimer.Tick += PerformanceTimer_Tick;
     }
 
-    private void WorkspaceTabs_Loaded(object sender, RoutedEventArgs e) =>
-        UpdateWorkspaceContentWidth(WorkspaceTabs.ActualWidth);
-
-    private void WorkspaceTabs_SizeChanged(object sender, SizeChangedEventArgs e) =>
-        UpdateWorkspaceContentWidth(e.NewSize.Width);
-
-    private void UpdateWorkspaceContentWidth(double availableWidth)
+    private void SelectSection(string section)
     {
-        if (OverviewScrollViewer is null) return;
-        var contentWidth = Math.Max(0, Math.Min(1400, availableWidth));
-        foreach (var scrollViewer in new[]
-                 {
-                     OverviewScrollViewer,
-                     ScreenScrollViewer,
-                     FilesScrollViewer,
-                     AppsScrollViewer,
-                     TerminalScrollViewer
-                 })
+        if (PageViews is null || ScreenScrollViewer is null) return;
+        if (section is not ("screen" or "files" or "apps" or "terminal" or "tasks" or "settings"))
+            section = "screen";
+
+        _selectedSection = section;
+        _synchronizingNavigation = true;
+        try
         {
-            scrollViewer.Width = contentWidth;
+            Navigation.SelectedItem = Navigation.Items.OfType<ListViewItem>()
+                .FirstOrDefault(item => item.Tag as string == section);
+            FooterNavigation.SelectedItem = FooterNavigation.Items.OfType<ListViewItem>()
+                .FirstOrDefault(item => item.Tag as string == section);
+        }
+        finally
+        {
+            _synchronizingNavigation = false;
         }
 
-        foreach (var content in new FrameworkElement[]
-                 {
-                     OverviewCards,
-                     ScreenCards,
-                     FilesCards,
-                     AppsCards,
-                     TerminalContent
-                 })
+        WorkspaceView.Visibility = section is "tasks" or "settings" ? Visibility.Collapsed : Visibility.Visible;
+        TasksView.Visibility = section == "tasks" ? Visibility.Visible : Visibility.Collapsed;
+        SettingsView.Visibility = section == "settings" ? Visibility.Visible : Visibility.Collapsed;
+        ScreenScrollViewer.Visibility = section == "screen" ? Visibility.Visible : Visibility.Collapsed;
+        FilesScrollViewer.Visibility = section == "files" ? Visibility.Visible : Visibility.Collapsed;
+        AppsScrollViewer.Visibility = section == "apps" ? Visibility.Visible : Visibility.Collapsed;
+        TerminalScrollViewer.Visibility = section == "terminal" ? Visibility.Visible : Visibility.Collapsed;
+        (WorkspaceTitle.Text, WorkspaceDescription.Text) = section switch
         {
-            content.Width = contentWidth;
-        }
+            "files" => ("文件管理", "在电脑与当前设备之间发送和获取文件。"),
+            "apps" => ("应用管理", "安装应用，管理当前设备上的应用程序。"),
+            "terminal" => ("终端", "向当前设备发送 Shell 命令，查看和导出输出。"),
+            _ => ("屏幕镜像", "查看画面，直接用键盘和鼠标控制。")
+        };
     }
 
     protected override async void OnNavigatedTo(NavigationEventArgs e)
@@ -130,10 +135,13 @@ public sealed partial class MainPage : Page
         if (ViewModel is not null) await ViewModel.ClearRememberedEndpointsAsync();
     }
 
-    private async void Mirror_Click(object sender, RoutedEventArgs e)
+    private async void MirrorAction_Click(object sender, RoutedEventArgs e)
     {
         if (ViewModel is null || ViewModel.IsBusy || GetCommandSerial(sender) is not { } serial) return;
-        await ViewModel.StartMirrorAsync(serial);
+        if (ViewModel.Sessions.Any(session => session.DeviceSerial == serial))
+            await ViewModel.StopMirrorAsync(serial);
+        else
+            await ViewModel.StartMirrorAsync(serial);
     }
 
     private void PairingCodeBox_PasswordChanged(object sender, RoutedEventArgs e)
@@ -154,7 +162,17 @@ public sealed partial class MainPage : Page
     private async void Disconnect_Click(object sender, RoutedEventArgs e)
     {
         if (ViewModel is null || ViewModel.IsBusy || GetCommandSerial(sender) is not { } serial) return;
-        await ViewModel.DisconnectAsync(serial);
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = "确认断开设备",
+            Content = $"将断开设备 {ViewModel.GetDeviceLabel(serial)}，当前镜像和传输可能中断。",
+            PrimaryButtonText = "断开连接",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Close
+        };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary && !_shutdown)
+            await ViewModel.DisconnectAsync(serial);
     }
 
     private async void Reboot_Click(object sender, RoutedEventArgs e)
@@ -233,6 +251,7 @@ public sealed partial class MainPage : Page
     private static string? GetCommandSerial(object sender) => sender switch
     {
         Button { CommandParameter: string serial } => serial,
+        MenuFlyoutItem { CommandParameter: string serial } => serial,
         FrameworkElement { Tag: string serial } => serial,
         _ => null
     };
@@ -242,54 +261,43 @@ public sealed partial class MainPage : Page
         if (ViewModel is not null) await ViewModel.RunDiagnosticsAsync();
     }
 
-    private async void Navigation_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+    private async void Navigation_SelectionChanged(object sender, SelectionChangedEventArgs args)
     {
-        WorkspaceView.Visibility = Visibility.Collapsed;
-        TasksView.Visibility = Visibility.Collapsed;
-        SettingsView.Visibility = Visibility.Collapsed;
-
-        if (args.IsSettingsSelected)
+        if (_synchronizingNavigation || PageViews is null || sender is not ListView list) return;
+        if (list.SelectedItem is not ListViewItem { Tag: string section })
         {
-            SettingsView.Visibility = Visibility.Visible;
-            ThemeSelector?.Focus(FocusState.Programmatic);
-            if (ViewModel is not null && ViewModel.Diagnostics.Count == 0)
-            {
-                await ViewModel.RunDiagnosticsAsync();
-            }
+            SelectSection(_selectedSection);
             return;
         }
-
-        var tag = (args.SelectedItemContainer as NavigationViewItem)?.Tag as string;
-        switch (tag)
+        SelectSection(section);
+        if (section == "settings" && ViewModel is not null && ViewModel.Diagnostics.Count == 0)
         {
-            case "tasks":
-                TasksView.Visibility = Visibility.Visible;
-                break;
-            default:
-                WorkspaceView.Visibility = Visibility.Visible;
-                RefreshDevicesButton?.Focus(FocusState.Programmatic);
-                break;
+            await ViewModel.RunDiagnosticsAsync();
         }
     }
 
     private void OpenDevices_Click(object sender, RoutedEventArgs e)
     {
-        Navigation.SelectedItem = WorkspaceNavigationItem;
-        WorkspaceView.Visibility = Visibility.Visible;
-        TasksView.Visibility = Visibility.Collapsed;
-        SettingsView.Visibility = Visibility.Collapsed;
+        SelectSection("screen");
         RefreshDevicesButton?.Focus(FocusState.Programmatic);
     }
 
-    private void OpenFilesTab_Click(object sender, RoutedEventArgs e) => WorkspaceTabs.SelectedIndex = 2;
+    private void OpenAddDevice_Click(object sender, RoutedEventArgs e) =>
+        AddDeviceButton.Flyout?.ShowAt(AddDeviceButton);
+
+    private void OpenTasks_Click(object sender, RoutedEventArgs e)
+    {
+        MirrorSettingsButton.Flyout?.Hide();
+        SelectSection("tasks");
+        TasksNavigationItem.Focus(FocusState.Programmatic);
+    }
 
     private async void OpenDiagnostics_Click(object sender, RoutedEventArgs e)
     {
-        Navigation.SelectedItem = Navigation.SettingsItem;
-        WorkspaceView.Visibility = Visibility.Collapsed;
-        TasksView.Visibility = Visibility.Collapsed;
-        SettingsView.Visibility = Visibility.Visible;
-        ThemeSelector?.Focus(FocusState.Programmatic);
+        SelectSection("settings");
+        SettingsView.UpdateLayout();
+        DiagnosticsCard.StartBringIntoView();
+        SettingsNavigationItem.Focus(FocusState.Programmatic);
         if (ViewModel is not null && ViewModel.Diagnostics.Count == 0)
         {
             await ViewModel.RunDiagnosticsAsync();
@@ -306,6 +314,7 @@ public sealed partial class MainPage : Page
         picker.FileTypeFilter.Add("*");
         InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(app.MainWindow));
         var files = await picker.PickMultipleFilesAsync();
+        if (_shutdown || files.Count == 0) return;
         ViewModel.SetTransferFiles(files.Select(file => file.Path));
     }
 
@@ -337,7 +346,8 @@ public sealed partial class MainPage : Page
     private async void DeviceDetails_Click(object sender, RoutedEventArgs e)
     {
         if (ViewModel is null) return;
-        var details = await ViewModel.GetDeviceDetailsAsync(ViewModel.SelectedDeviceSerial);
+        var serial = GetCommandSerial(sender) ?? ViewModel.SelectedDeviceSerial;
+        var details = await ViewModel.GetDeviceDetailsAsync(serial);
         if (details is null || _shutdown) return;
 
         var battery = details.BatteryLevel is null
@@ -423,7 +433,7 @@ public sealed partial class MainPage : Page
 
     private async void RunShellCommand_Click(object sender, RoutedEventArgs e)
     {
-        if (ViewModel is null) return;
+        if (ViewModel is null || ViewModel.IsBusy) return;
         var serial = ViewModel.SelectedDeviceSerial;
         var command = ViewModel.ShellCommand.Trim();
         if (string.IsNullOrWhiteSpace(serial) || string.IsNullOrWhiteSpace(command))
@@ -431,6 +441,7 @@ public sealed partial class MainPage : Page
             await ViewModel.RunDeviceShellCommandAsync(serial, command);
             return;
         }
+        if (!ViewModel.TryValidateDeviceShellCommand(command)) return;
 
         var dialog = new ContentDialog
         {
@@ -533,7 +544,12 @@ public sealed partial class MainPage : Page
 
     private async void MirrorProfileSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_initializingSettings || ViewModel is null || sender is not ComboBox { SelectedValue: string profileId }) return;
+        if (_initializingSettings || ViewModel is null || sender is not Selector selector) return;
+        if (selector.SelectedValue is not string profileId)
+        {
+            selector.SelectedValue = ViewModel.SelectedMirrorProfileId;
+            return;
+        }
         await ViewModel.SetMirrorProfileAsync(profileId);
     }
 
@@ -601,6 +617,7 @@ public sealed partial class MainPage : Page
     {
         var enabled = !_shutdown && ViewModel is { PerformanceMonitoringEnabled: true };
         PerformanceMetricsPanel.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
+        PerformanceDisabledHint.Visibility = enabled ? Visibility.Collapsed : Visibility.Visible;
         if (enabled)
         {
             _performanceTimer.Start();

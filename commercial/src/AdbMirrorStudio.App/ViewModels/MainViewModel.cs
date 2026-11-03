@@ -27,6 +27,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly IDiagnosticsService _diagnosticsService;
     private readonly IUpdateService _updates;
     private readonly SynchronizationContext _uiContext;
+    private readonly TimeProvider _timeProvider;
     private readonly CancellationTokenSource _lifetimeCancellation = new();
     private readonly CancellationToken _lifetimeToken;
     private readonly ConcurrentDictionary<string, string> _sessionFailures = new(StringComparer.Ordinal);
@@ -37,6 +38,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private CancellationTokenSource? _performanceCancellation;
     private DevicePerformanceWindow _performanceWindow = new(TimeSpan.FromSeconds(30));
     private int _performanceGeneration;
+    private double _cpuUsagePercent;
+    private double _gpuUsagePercent;
+    private double _memoryUsagePercent;
+    private double _ddrUsagePercent;
     private string _cpuUsageText = "—";
     private string _cpuAverageText = "—";
     private string _cpuTemperatureText = "—";
@@ -61,6 +66,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private bool _checkingUpdates;
     private long _appsRequestVersion;
     private long _statusVersion;
+    private long _statusNotificationVersion;
+    private ITimer? _statusDismissTimer;
     private string _statusText = "正在初始化设备服务…";
     private bool _isStatusOpen = true;
     private string _endpoint = "192.168.1.100:5555";
@@ -85,7 +92,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private bool _isShellCommandRunning;
     private AppSettings _settings = AppSettings.Default;
 
-    public MainViewModel(AppServices services)
+    public MainViewModel(AppServices services, TimeProvider? timeProvider = null)
     {
         _adb = services.Adb;
         _mirrorSessions = services.MirrorSessions;
@@ -96,6 +103,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _refreshCoordinator = new DeviceRefreshCoordinator(_adb);
         _uiContext = SynchronizationContext.Current
             ?? throw new InvalidOperationException("MainViewModel 必须在 UI 线程创建。");
+        _timeProvider = timeProvider ?? TimeProvider.System;
         _mirrorSessions.SessionChanged += OnSessionChanged;
     }
 
@@ -137,22 +145,55 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         get => _statusText;
         private set
         {
+            if (_disposed) return;
             if (SetField(ref _statusText, value))
             {
                 _statusVersion++;
-                IsStatusOpen = true;
                 OnPropertyChanged(nameof(StatusSeverity));
             }
+            // Repeating an operation can produce the same text. It is still a
+            // fresh notification, but must not change refresh-response ordering.
+            IsStatusOpen = true;
+            RestartStatusDismissal();
         }
     }
 
     public bool IsStatusOpen
     {
         get => _isStatusOpen;
-        set => SetField(ref _isStatusOpen, value);
+        set
+        {
+            if (SetField(ref _isStatusOpen, value) && !value) CancelStatusDismissal();
+        }
     }
 
     public InfoBarSeverity StatusSeverity => GetStatusSeverity(StatusText);
+
+    private void RestartStatusDismissal()
+    {
+        CancelStatusDismissal();
+        if (!IsStatusOpen || StatusSeverity != InfoBarSeverity.Success) return;
+        var notificationVersion = _statusNotificationVersion;
+        _statusDismissTimer = _timeProvider.CreateTimer(_ =>
+        {
+            if (_lifetimeToken.IsCancellationRequested) return;
+            _uiContext.Post(_ =>
+            {
+                // A replaced notification or a manual close may happen after
+                // the timer fires but before this callback reaches the UI.
+                if (_disposed || _lifetimeToken.IsCancellationRequested
+                    || notificationVersion != _statusNotificationVersion) return;
+                IsStatusOpen = false;
+            }, null);
+        }, null, TimeSpan.FromSeconds(5), Timeout.InfiniteTimeSpan);
+    }
+
+    private void CancelStatusDismissal()
+    {
+        _statusNotificationVersion++;
+        _statusDismissTimer?.Dispose();
+        _statusDismissTimer = null;
+    }
 
     public string Endpoint
     {
@@ -211,6 +252,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool IsRecordingEnabled => !string.IsNullOrWhiteSpace(RecordingPath);
 
     public string OnlineSummary => $"{Devices.Count(device => device.State == DeviceState.Online)} 台在线";
+    public bool HasNoDevices => Devices.Count == 0;
     public bool HasNoSessions => Sessions.Count == 0;
     public bool HasNoTransferTasks => TransferQueue.Count == 0;
     public bool HasNoRecordings => Recordings.Count == 0;
@@ -219,7 +261,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool PerformanceMonitoringEnabled => _settings.PerformanceMonitoringEnabled;
     public bool HasRememberedEndpoints => RememberedEndpoints.Count > 0;
     public bool FirstRunCompleted => _settings.FirstRunCompleted;
-    public string AppVersion => AppVersionInfo.ProductVersion;
+    public string AppVersion => AppVersionInfo.DisplayVersion;
     public string DataDirectory => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AdbMirrorStudio");
     public string UpdateStatusText
@@ -281,16 +323,23 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             InstalledApps.Clear();
             SelectedAppPackage = null;
             OnPropertyChanged(nameof(SelectedDeviceLabel));
+            OnPropertyChanged(nameof(SelectedDeviceContext));
             OnPropertyChanged(nameof(HasSelectedDevice));
             OnPropertyChanged(nameof(CanUseSelectedDevice));
-            OnPropertyChanged(nameof(CanStartSelectedMirror));
-            OnPropertyChanged(nameof(CanStopSelectedMirror));
+            NotifySelectedMirrorState();
             OnPropertyChanged(nameof(CanInstallApk));
             OnPropertyChanged(nameof(CanPushFiles));
             OnPropertyChanged(nameof(CanRunSelectedAppAction));
         }
     }
     public string SelectedDeviceLabel => GetDeviceLabel(SelectedDeviceSerial);
+    public string SelectedDeviceContext => Devices.FirstOrDefault(device => device.Serial == SelectedDeviceSerial) is { } selectedDevice
+        ? $"{selectedDevice.ConnectionLabel} · {selectedDevice.StateLabel}"
+        : "连接并选择设备，开始使用工作区";
+    public double CpuUsagePercent { get => _cpuUsagePercent; private set => SetField(ref _cpuUsagePercent, value); }
+    public double GpuUsagePercent { get => _gpuUsagePercent; private set => SetField(ref _gpuUsagePercent, value); }
+    public double MemoryUsagePercent { get => _memoryUsagePercent; private set => SetField(ref _memoryUsagePercent, value); }
+    public double DdrUsagePercent { get => _ddrUsagePercent; private set => SetField(ref _ddrUsagePercent, value); }
     public string CpuUsageText { get => _cpuUsageText; private set => SetField(ref _cpuUsageText, value); }
     public string CpuAverageText { get => _cpuAverageText; private set => SetField(ref _cpuAverageText, value); }
     public string CpuTemperatureText { get => _cpuTemperatureText; private set => SetField(ref _cpuTemperatureText, value); }
@@ -319,6 +368,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             if (_disposed || !PerformanceMonitoringEnabled || cancellation.IsCancellationRequested || generation != _performanceGeneration
                 || !string.Equals(serial, SelectedDeviceSerial, StringComparison.Ordinal)) return;
             var reading = _performanceWindow.Add(counters, DateTimeOffset.UtcNow);
+            UpdatePerformancePercentages(reading);
             CpuUsageText = FormatPerformancePercent(reading.CpuUsagePercent, "计算中");
             CpuAverageText = FormatPerformancePercent(reading.CpuAveragePercent, "计算中");
             CpuTemperatureText = FormatTemperature(counters.CpuTemperatureCelsius, "不可用");
@@ -346,6 +396,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 && generation == _performanceGeneration)
             {
                 _performanceWindow = new DevicePerformanceWindow(TimeSpan.FromSeconds(30));
+                UpdatePerformancePercentages(null);
                 CpuUsageText = "暂不可用";
                 CpuAverageText = "—";
                 CpuTemperatureText = "暂不可用";
@@ -375,6 +426,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _performanceCancellation = null;
         previous?.Cancel();
         _performanceWindow = new DevicePerformanceWindow(TimeSpan.FromSeconds(30));
+        UpdatePerformancePercentages(null);
         CpuUsageText = "—";
         CpuAverageText = "—";
         CpuTemperatureText = "—";
@@ -395,6 +447,17 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                     ? "正在采集设备性能…"
                     : "当前设备未在线，连接后开始采样";
     }
+
+    private void UpdatePerformancePercentages(DevicePerformanceReading? reading)
+    {
+        CpuUsagePercent = ProgressPercent(reading?.CpuUsagePercent);
+        GpuUsagePercent = ProgressPercent(reading?.GpuUsagePercent);
+        MemoryUsagePercent = ProgressPercent(reading?.MemoryUsagePercent);
+        DdrUsagePercent = ProgressPercent(reading?.DdrUsagePercent);
+    }
+
+    private static double ProgressPercent(double? value) =>
+        value is { } percent && double.IsFinite(percent) ? Math.Clamp(percent, 0d, 100d) : 0d;
 
     private static string FormatPerformancePercent(double? value, string fallback) =>
         value is { } percent ? $"{percent:F1}%" : fallback;
@@ -418,7 +481,19 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool HasSelectedDevice => !string.IsNullOrWhiteSpace(SelectedDeviceSerial);
     public bool SelectedDeviceIsMirroring => Devices.FirstOrDefault(device =>
         string.Equals(device.Serial, SelectedDeviceSerial, StringComparison.Ordinal))?.IsMirroring == true;
-    public bool CanUseSelectedDevice => IsIdle && HasSelectedDevice;
+    private bool SelectedMirrorTargetReady => Devices.FirstOrDefault(device =>
+        string.Equals(device.Serial, SelectedDeviceSerial, StringComparison.Ordinal))?.State == DeviceState.Online;
+    public string SelectedMirrorActionText => SelectedDeviceIsMirroring ? "停止镜像" : "开始镜像";
+    public string SelectedMirrorStatusText => !SelectedMirrorTargetReady ? "等待连接设备"
+        : SelectedDeviceIsMirroring ? "镜像运行中" : "设备已就绪";
+    public string SelectedMirrorHeadline => !SelectedMirrorTargetReady ? "连接设备，开始镜像"
+        : SelectedDeviceIsMirroring ? "镜像正在独立窗口中运行" : "将设备屏幕带到电脑上";
+    public string SelectedMirrorDescription => !SelectedMirrorTargetReady
+        ? "通过 USB 或无线方式连接并选择设备。镜像会在独立窗口中打开。"
+        : SelectedDeviceIsMirroring
+            ? "在独立镜像窗口中操作设备；这里可以调整下次启动的画质或停止镜像。"
+            : "选择画质后开始镜像，在独立窗口中查看和控制设备。";
+    public bool CanUseSelectedDevice => IsIdle && HasSelectedDevice && SelectedMirrorTargetReady;
     public bool CanStartSelectedMirror => CanUseSelectedDevice && !SelectedDeviceIsMirroring;
     public bool CanStopSelectedMirror => CanUseSelectedDevice && SelectedDeviceIsMirroring;
     public bool CanInstallApk => CanUseSelectedDevice && File.Exists(ApkFilePath);
@@ -427,6 +502,17 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool CanRunSelectedAppAction => CanUseSelectedDevice
         && !string.IsNullOrWhiteSpace(SelectedAppPackage);
     public bool CanArrangeMirrorWindows => IsIdle && Sessions.Count > 1;
+
+    private void NotifySelectedMirrorState()
+    {
+        OnPropertyChanged(nameof(SelectedDeviceIsMirroring));
+        OnPropertyChanged(nameof(SelectedMirrorActionText));
+        OnPropertyChanged(nameof(SelectedMirrorStatusText));
+        OnPropertyChanged(nameof(SelectedMirrorHeadline));
+        OnPropertyChanged(nameof(SelectedMirrorDescription));
+        OnPropertyChanged(nameof(CanStartSelectedMirror));
+        OnPropertyChanged(nameof(CanStopSelectedMirror));
+    }
     public string? SelectedAppPackage
     {
         get => _selectedAppPackage;
@@ -560,8 +646,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (_settings.AutoRefresh == enabled) return;
         _settings = _settings with { AutoRefresh = enabled };
         OnPropertyChanged(nameof(AutoRefresh));
-        await SaveSettingsSafelyAsync();
-        StatusText = enabled ? "已启用设备自动刷新（每 5 秒）" : "已关闭设备自动刷新";
+        if (await SaveSettingsSafelyAsync())
+            StatusText = enabled ? "已启用设备自动刷新（每 5 秒）" : "已关闭设备自动刷新";
     }
 
     public async Task SetPerformanceMonitoringAsync(bool enabled)
@@ -579,8 +665,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (!MirrorProfile.Presets.Any(profile => profile.Id == profileId)) return;
         SelectedMirrorProfileId = profileId;
         _settings = _settings with { MirrorProfileId = profileId };
-        await SaveSettingsSafelyAsync();
-        StatusText = $"镜像预设已切换为 {MirrorProfile.Presets.First(profile => profile.Id == profileId).Name}";
+        if (await SaveSettingsSafelyAsync())
+            StatusText = $"镜像预设已切换为 {MirrorProfile.Presets.First(profile => profile.Id == profileId).Name}";
     }
 
     public async Task CompleteFirstRunAsync()
@@ -906,9 +992,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             }
             OnPropertyChanged(nameof(HasNoSessions));
             OnPropertyChanged(nameof(CanArrangeMirrorWindows));
-            OnPropertyChanged(nameof(SelectedDeviceIsMirroring));
-            OnPropertyChanged(nameof(CanStartSelectedMirror));
-            OnPropertyChanged(nameof(CanStopSelectedMirror));
 
             foreach (var recordingSession in activeSessions.Where(session => !string.IsNullOrWhiteSpace(session.RecordPath)))
             {
@@ -929,10 +1012,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             SelectedDeviceSerial = resolvedDevice;
             OnPropertyChanged(nameof(SelectedDeviceSerial));
             OnPropertyChanged(nameof(SelectedDeviceLabel));
+            OnPropertyChanged(nameof(SelectedDeviceContext));
             OnPropertyChanged(nameof(HasSelectedDevice));
             OnPropertyChanged(nameof(CanUseSelectedDevice));
-            OnPropertyChanged(nameof(CanStartSelectedMirror));
-            OnPropertyChanged(nameof(CanStopSelectedMirror));
+            NotifySelectedMirrorState();
             OnPropertyChanged(nameof(CanInstallApk));
             OnPropertyChanged(nameof(CanPushFiles));
             OnPropertyChanged(nameof(CanRunSelectedAppAction));
@@ -944,6 +1027,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                     ? "未发现设备，可通过 USB 或无线地址连接"
                     : $"已发现 {snapshot.Devices.Count} 台设备";
             OnPropertyChanged(nameof(OnlineSummary));
+            OnPropertyChanged(nameof(HasNoDevices));
         }
         catch (OperationCanceledException)
         {
@@ -988,8 +1072,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             var result = await _adb.ConnectAsync(normalizedEndpoint, _lifetimeToken);
             _lifetimeToken.ThrowIfCancellationRequested();
             StatusText = result;
-            await RememberEndpointsAsync([normalizedEndpoint]);
             await RefreshAsync();
+            await RememberEndpointsAsync([normalizedEndpoint]);
         }
         catch (Exception exception)
         {
@@ -1014,8 +1098,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         };
         ReplaceRememberedEndpoints([]);
         Endpoint = string.Empty;
-        await SaveSettingsSafelyAsync();
-        StatusText = "已清除连接历史；当前在线设备不会断开";
+        if (await SaveSettingsSafelyAsync())
+            StatusText = "已清除连接历史；当前在线设备不会断开";
     }
 
     public async Task StartMirrorAsync(string serial)
@@ -1385,7 +1469,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public async Task RefreshInstalledAppsAsync(bool includeSystemApps)
+    public Task RefreshInstalledAppsAsync(bool includeSystemApps) =>
+        RefreshInstalledAppsCoreAsync(includeSystemApps);
+
+    private async Task RefreshInstalledAppsCoreAsync(bool includeSystemApps, string? completedOperation = null)
     {
         if (_disposed) return;
         var version = ++_appsRequestVersion;
@@ -1408,12 +1495,14 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             InstalledApps.Clear();
             foreach (var app in apps) InstalledApps.Add(new InstalledAppViewModel(app));
             SelectedAppPackage = InstalledApps.FirstOrDefault()?.PackageName;
-            StatusText = $"已读取 {apps.Count} 个应用";
+            StatusText = completedOperation ?? $"已读取 {apps.Count} 个应用";
         }
         catch (Exception exception)
         {
             if (!_disposed && version == _appsRequestVersion)
-                StatusText = $"读取应用失败：{exception.Message}";
+                StatusText = completedOperation is null
+                    ? $"读取应用失败：{exception.Message}"
+                    : $"{completedOperation}；但刷新应用列表失败：{exception.Message}。请重新读取应用列表";
         }
         finally
         {
@@ -1441,7 +1530,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             }
             if (action == "uninstall" && string.Equals(serial, SelectedDeviceSerial, StringComparison.Ordinal))
             {
-                await RefreshInstalledAppsAsync(includeSystemApps: false);
+                await RefreshAppsAfterUninstallAsync(packageName, $"已从 {serial} 卸载 {packageName}");
+                return;
             }
             StatusText = $"已在 {serial} 完成应用操作：{packageName}";
         }
@@ -1476,7 +1566,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             await _adb.UninstallAppAsync(serial, packageName, _lifetimeToken);
             if (string.Equals(PackageNameInput.Trim(), packageName, StringComparison.Ordinal)) PackageNameInput = string.Empty;
             if (string.Equals(serial, SelectedDeviceSerial, StringComparison.Ordinal))
-                await RefreshInstalledAppsAsync(includeSystemApps: false);
+            {
+                await RefreshAppsAfterUninstallAsync(packageName, $"已从 {serial} 卸载 {packageName}");
+                return;
+            }
             StatusText = $"已从 {serial} 卸载 {packageName}";
         }
         catch (Exception exception)
@@ -1486,6 +1579,30 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         finally
         {
             ExitBusy();
+        }
+    }
+
+    private async Task RefreshAppsAfterUninstallAsync(string packageName, string completedOperation)
+    {
+        foreach (var app in InstalledApps.Where(app => app.PackageName == packageName).ToArray())
+            InstalledApps.Remove(app);
+        if (SelectedAppPackage == packageName) SelectedAppPackage = null;
+        await RefreshInstalledAppsCoreAsync(includeSystemApps: false, completedOperation: completedOperation);
+    }
+
+    public bool TryValidateDeviceShellCommand(string command)
+    {
+        if (_disposed) return false;
+        try
+        {
+            DeviceShellCommand.Validate(command);
+            return true;
+        }
+        catch (ArgumentException exception)
+        {
+            ShellOutput = $"$ {command.Trim()}{Environment.NewLine}[输入提示] {exception.Message}";
+            StatusText = $"设备命令输入错误，未执行：{exception.Message}";
+            return false;
         }
     }
 
@@ -1504,6 +1621,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             return;
         }
         if (_shellCommandCancellation is not null || IsBusy) return;
+        if (!TryValidateDeviceShellCommand(command)) return;
 
         var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_lifetimeToken);
         _shellCommandCancellation = cancellation;
@@ -1558,17 +1676,19 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    private async Task SaveSettingsSafelyAsync()
+    private async Task<bool> SaveSettingsSafelyAsync()
     {
         try
         {
             await _settingsStore.SaveAsync(_settings, _lifetimeToken);
+            return true;
         }
         catch (OperationCanceledException) when (_disposed) { }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             StatusText = $"设置暂时无法保存：{exception.Message}";
         }
+        return false;
     }
 
     private async Task RememberEndpointsAsync(IEnumerable<string> endpoints)
@@ -1643,6 +1763,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        CancelStatusDismissal();
         _mirrorSessions.SessionChanged -= OnSessionChanged;
         var refreshCancellation = Interlocked.Exchange(ref _refreshCancellation, null);
         refreshCancellation?.Cancel();
@@ -1678,9 +1799,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 if (isActiveState) Sessions.Add(new MirrorSessionCardViewModel(session, card?.DisplayName));
                 OnPropertyChanged(nameof(HasNoSessions));
                 OnPropertyChanged(nameof(CanArrangeMirrorWindows));
-                OnPropertyChanged(nameof(SelectedDeviceIsMirroring));
-                OnPropertyChanged(nameof(CanStartSelectedMirror));
-                OnPropertyChanged(nameof(CanStopSelectedMirror));
+                NotifySelectedMirrorState();
             }
             if (!string.IsNullOrWhiteSpace(session.RecordPath))
             {

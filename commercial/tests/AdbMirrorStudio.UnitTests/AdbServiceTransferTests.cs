@@ -251,10 +251,67 @@ public sealed class AdbServiceTransferTests : IDisposable
         Assert.Empty(runner.Requests);
     }
 
+    [Fact]
+    public async Task RunShellCommandAsync_RejectsHostAdbCommandBeforeStartingProcess()
+    {
+        var runner = new CapturingRunner(string.Empty);
+        var service = new AdbService(runner, CreateFile("adb.exe"));
+
+        var error = await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.RunShellCommandAsync("selected-device", "adb -s other-device shell pm list packages | findstr com.tp"));
+
+        Assert.Contains("pm list packages com.tp", error.Message);
+        Assert.Empty(runner.Requests);
+    }
+
+    [Theory]
+    [InlineData("/system/bin/sh: findstr: inaccessible or not found")]
+    [InlineData("sh: findstr: not found")]
+    public async Task RunShellCommandAsync_MissingFindstrPreservesFailureAndAddsDeviceCommandHint(string stderr)
+    {
+        var runner = new SequenceRunner(new CommandResult(127, "partial output", stderr, TimeSpan.Zero, false, false));
+        var service = new AdbService(runner, CreateFile("adb.exe"));
+
+        var error = await Assert.ThrowsAsync<AdbCommandException>(() =>
+            service.RunShellCommandAsync("selected-device", "pm list packages | findstr com.tp"));
+
+        Assert.Equal(127, error.ExitCode);
+        Assert.StartsWith(stderr, error.Message);
+        Assert.Contains("partial output", error.Message);
+        Assert.Contains("findstr 是 Windows 命令", error.Message);
+        Assert.Contains("pm list packages com.tp", error.Message);
+        Assert.Equal(["-s", "selected-device", "shell", "pm list packages | findstr com.tp"],
+            Assert.Single(runner.Requests).Arguments);
+    }
+
+    [Theory]
+    [InlineData(0, "findstr: not found")]
+    [InlineData(127, "myfindstr: not found")]
+    [InlineData(1, "findstr: permission denied")]
+    [InlineData(127, "findstr\n/system/bin/sh: another-command: not found")]
+    public async Task RunShellCommandAsync_DoesNotInferMissingFindstrFromUnrelatedOutput(int exitCode, string stderr)
+    {
+        var runner = new SequenceRunner(new CommandResult(exitCode, string.Empty, stderr, TimeSpan.Zero, false, false));
+        var service = new AdbService(runner, CreateFile("adb.exe"));
+
+        if (exitCode == 0)
+        {
+            var output = await service.RunShellCommandAsync("device", "echo findstr");
+            Assert.Equal(stderr, output);
+        }
+        else
+        {
+            var error = await Assert.ThrowsAsync<AdbCommandException>(() => service.RunShellCommandAsync("device", "echo findstr"));
+            Assert.Equal(stderr, error.Message);
+        }
+    }
+
     [Theory]
     [InlineData("printf '%s' 'hello world'")]
     [InlineData("printf '%s' \"a'b\" | wc -c")]
     [InlineData("getprop ro.product.model && getprop ro.build.version.sdk")]
+    [InlineData("pm list packages com.tp")]
+    [InlineData("echo 'adb shell | findstr com.tp'")]
     public async Task RunShellCommandAsync_PreservesCompleteRemoteShellExpression(string command)
     {
         var runner = new CapturingRunner(string.Empty);

@@ -449,7 +449,7 @@ public sealed class AdbService(ICommandRunner commandRunner, string adbPath) : I
         CancellationToken cancellationToken = default)
     {
         ValidateSerial(serial);
-        ValidateShellCommand(command);
+        DeviceShellCommand.Validate(command);
         cancellationToken.ThrowIfCancellationRequested();
         if (!File.Exists(adbPath)) throw new FileNotFoundException("未找到 adb.exe。", adbPath);
         var result = await commandRunner.RunAsync(
@@ -462,7 +462,16 @@ public sealed class AdbService(ICommandRunner commandRunner, string adbPath) : I
                 SensitiveArguments: true),
             cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
-        EnsureSuccess(result);
+        try
+        {
+            EnsureSuccess(result);
+        }
+        catch (AdbCommandException exception) when (!result.TimedOut && IsFindstrUnavailable(result.StandardError))
+        {
+            throw new AdbCommandException(
+                $"{exception.Message}{Environment.NewLine}提示：findstr 是 Windows 命令，不能直接在 Android 设备 Shell 中使用。查找包名请使用 pm list packages com.tp。",
+                exception.ExitCode);
+        }
 
         var output = result.StandardOutput.TrimEnd();
         var error = result.StandardError.TrimEnd();
@@ -540,20 +549,19 @@ public sealed class AdbService(ICommandRunner commandRunner, string adbPath) : I
         }
     }
 
-    private static void ValidateShellCommand(string command)
+    private static bool IsFindstrUnavailable(string error)
     {
-        if (string.IsNullOrWhiteSpace(command))
+        foreach (var line in error.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
         {
-            throw new ArgumentException("设备命令不能为空。", nameof(command));
+            var trimmed = line.Trim();
+            foreach (var message in new[] { "findstr: inaccessible or not found", "findstr: not found" })
+            {
+                if (!trimmed.EndsWith(message, StringComparison.OrdinalIgnoreCase)) continue;
+                var start = trimmed.Length - message.Length;
+                if (start == 0 || char.IsWhiteSpace(trimmed[start - 1]) || trimmed[start - 1] == ':') return true;
+            }
         }
-        if (command.Length > 4096)
-        {
-            throw new ArgumentException("设备命令不能超过 4096 个字符。", nameof(command));
-        }
-        if (command.Any(character => char.IsControl(character) && character != '\t'))
-        {
-            throw new ArgumentException("设备命令不能包含换行或其他控制字符。", nameof(command));
-        }
+        return false;
     }
 
     private static void ValidateLocalFile(string path, string? requiredExtension = null)

@@ -15,7 +15,7 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
         AppWindow.Title = "ADB Mirror Studio";
-        VersionText.Text = AppVersionInfo.ProductVersion;
+        VersionText.Text = AppVersionInfo.DisplayVersion;
         var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
         if (File.Exists(iconPath)) AppWindow.SetIcon(iconPath);
         UpdateTitleBarColors();
