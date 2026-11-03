@@ -8,7 +8,7 @@
 
 ## 下载
 
-当前预发布版本：`V2.0.0`（界面显示 `V2.0.0-2026.11.03`）
+当前版本：`V2.0.0`（界面显示 `V2.0.0-2026.11.03`）
 
 - [GitHub Release](https://github.com/NingCui29/ADB-Mirror-Studio/releases/tag/V2.0.0)
 - [下载安装版（推荐）](https://github.com/NingCui29/ADB-Mirror-Studio/releases/download/V2.0.0/ADB-Mirror-Studio-Setup-V2.0.0-win-x64.exe)
