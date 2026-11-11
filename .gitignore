@@ -1,5 +1,5 @@
 .tools/
-.codex-checks/
+.local-checks/
 venv/
 __pycache__/
 build/
