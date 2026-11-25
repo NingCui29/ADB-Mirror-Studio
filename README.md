@@ -8,13 +8,13 @@
 
 ## 下载
 
-当前版本：`V2.0.0`（界面显示 `V2.0.0-2026.11.03`）
+当前发行版 `V2.0.0-2026.11.25`。
 
-- [GitHub Release](https://github.com/NingCui29/ADB-Mirror-Studio/releases/tag/V2.0.0)
-- [下载安装版（推荐）](https://github.com/NingCui29/ADB-Mirror-Studio/releases/download/V2.0.0/ADB-Mirror-Studio-Setup-V2.0.0-win-x64.exe)
-- [下载便携版](https://github.com/NingCui29/ADB-Mirror-Studio/releases/download/V2.0.0/AdbMirrorStudio-V2.0.0-win-x64.zip)
+- [GitHub Release 和 SHA256](https://github.com/NingCui29/ADB-Mirror-Studio/releases/tag/V2.0.0-2026.11.25)
+- [下载安装版（推荐）](https://github.com/NingCui29/ADB-Mirror-Studio/releases/download/V2.0.0-2026.11.25/ADB-Mirror-Studio-Setup-V2.0.0-2026.11.25-win-x64.exe)
+- [下载便携版](https://github.com/NingCui29/ADB-Mirror-Studio/releases/download/V2.0.0-2026.11.25/AdbMirrorStudio-V2.0.0-2026.11.25-win-x64.zip)
 
-SHA256 见 [V2.0.0 发行说明](commercial/RELEASE-NOTES-V2.0.0.md)。
+从早期 `V2.0.0` 升级时，请下载新版安装包并覆盖安装。支持完整版本号的客户端可以在应用内识别同一基础版本的更新日期。
 
 ## 主要功能
 
@@ -40,7 +40,7 @@ SHA256 见 [V2.0.0 发行说明](commercial/RELEASE-NOTES-V2.0.0.md)。
 - 从设备下载文件或目录
 - 设备详情、电池、存储、截图和 Logcat 导出
 - 可开关的整机 CPU/GPU/内存/DDR 性能监测：默认关闭，开启后显示实时占用、最近 30 秒平均占用、CPU/GPU 温度及 DDR 频率；关闭后停止采样并隐藏指标
-- 返回、主页、最近任务、电源和音量快捷控制
+- 每个镜像窗口顶部提供返回、主屏、最近应用、电源、音量和截图快捷控制
 - 用户应用读取、启动、强制停止和确认卸载
 - 无需读取应用列表，直接按 Android 包名确认卸载
 - 指定目标设备的内置 ADB Shell 控制台，不调用 Windows cmd.exe
@@ -63,7 +63,7 @@ SHA256 见 [V2.0.0 发行说明](commercial/RELEASE-NOTES-V2.0.0.md)。
 
 ### 安装版
 
-1. 下载 `ADB-Mirror-Studio-Setup-V2.0.0-win-x64.exe`。
+1. 下载 `ADB-Mirror-Studio-Setup-V2.0.0-2026.11.25-win-x64.exe`。
 2. 核对上方 SHA256 后运行安装程序。
 3. 从开始菜单打开 ADB Mirror Studio。
 
@@ -71,7 +71,7 @@ SHA256 见 [V2.0.0 发行说明](commercial/RELEASE-NOTES-V2.0.0.md)。
 
 ### 便携版
 
-1. 下载 `AdbMirrorStudio-V2.0.0-win-x64.zip`。
+1. 下载 `AdbMirrorStudio-V2.0.0-2026.11.25-win-x64.zip`。
 2. 完整解压 ZIP，不要直接在压缩包中运行。
 3. 双击 `AdbMirrorStudio.App.exe`。
 
@@ -102,7 +102,7 @@ SHA256 见 [V2.0.0 发行说明](commercial/RELEASE-NOTES-V2.0.0.md)。
 检查到后续新版本时，“设置 → 更新”会提供“下载并安装”：
 
 1. 只接受固定 GitHub 仓库的 HTTPS Windows x64 安装包。
-2. 安装包名称必须与目标版本一致。
+2. 优先比较三段基础版本号，三段相同时比较打包日期。安装包文件名和包内完整版本必须与发行标签一致。
 3. 下载到 `.download` 临时文件并显示进度，可随时取消。
 4. 文件大小和 GitHub SHA256 均一致后才更名并启动。
 5. 启动安装器后正常关闭当前应用，继续覆盖升级。
@@ -160,6 +160,7 @@ SHA256 见 [V2.0.0 发行说明](commercial/RELEASE-NOTES-V2.0.0.md)。
 
 ## 文档
 
+- [V2.0.0-2026.11.25 发行说明](commercial/RELEASE-NOTES-V2.0.0-2026.11.25.md)
 - [V2.0.0 发行说明](commercial/RELEASE-NOTES-V2.0.0.md)
 - [V2.0.0 发布验收](commercial/DEVICE-QA-V2.0.0.md)
 - [完整使用、开发和发布手册](commercial/README.md)

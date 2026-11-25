@@ -50,18 +50,38 @@ public sealed class ProcessCommandRunnerTests
     }
 
     [Fact]
-    public async Task RunAsync_TimeoutAlsoBoundsInheritedOutputPipeDrain()
+    public async Task RunAsync_ExitedProcessWithInheritedPipe_IsNotReportedAsTimeout()
+    {
+        var runner = new ProcessCommandRunner();
+        var command = Environment.GetEnvironmentVariable("ComSpec")
+            ?? Path.Combine(Environment.SystemDirectory, "cmd.exe");
+        // "start /b" exits immediately but leaves a child holding the inherited
+        // output pipe. The command itself has completed, so only the drain is bounded.
+        var request = new CommandRequest(command,
+            ["/d", "/c", "start /b ping 127.0.0.1 -n 5"], Timeout: TimeSpan.FromSeconds(1));
+
+        var result = await runner.RunAsync(request).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.False(result.TimedOut);
+        Assert.False(result.Cancelled);
+        Assert.Contains("[输出已截断]", result.StandardOutput + result.StandardError);
+    }
+
+    [Fact]
+    public async Task RunAsync_CompletedCommandKeepsItsExitCodeAndOutput()
     {
         var runner = new ProcessCommandRunner();
         var command = Environment.GetEnvironmentVariable("ComSpec")
             ?? Path.Combine(Environment.SystemDirectory, "cmd.exe");
         var request = new CommandRequest(command,
-            ["/d", "/c", "start /b ping 127.0.0.1 -n 5"], Timeout: TimeSpan.FromMilliseconds(300));
+            ["/d", "/c", "echo mirror-ready"], Timeout: TimeSpan.FromSeconds(5));
 
-        var result = await runner.RunAsync(request).WaitAsync(TimeSpan.FromSeconds(3));
+        var result = await runner.RunAsync(request);
 
-        Assert.True(result.TimedOut);
+        Assert.False(result.TimedOut);
         Assert.False(result.Cancelled);
+        Assert.True(result.IsSuccess);
+        Assert.Contains("mirror-ready", result.StandardOutput);
     }
 
     private static CommandRequest LongRunningCommand(TimeSpan timeout)

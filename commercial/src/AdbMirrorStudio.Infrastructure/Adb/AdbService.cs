@@ -469,7 +469,7 @@ public sealed class AdbService(ICommandRunner commandRunner, string adbPath) : I
         catch (AdbCommandException exception) when (!result.TimedOut && IsFindstrUnavailable(result.StandardError))
         {
             throw new AdbCommandException(
-                $"{exception.Message}{Environment.NewLine}提示：findstr 是 Windows 命令，不能直接在 Android 设备 Shell 中使用。查找包名请使用 pm list packages com.tp。",
+                $"{exception.Message}{Environment.NewLine}提示：findstr 是 Windows 命令，不能直接在 Android 设备 Shell 中使用。查找包名请使用 pm list packages com.android。",
                 exception.ExitCode);
         }
 
@@ -628,7 +628,9 @@ public sealed class AdbService(ICommandRunner commandRunner, string adbPath) : I
     {
         var line = output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
         if (line is null) return "—";
+        // Android "df -h /data": Filesystem | Size | Used | Avail | Use% | Mounted on.
+        // columns[4] is the usage percentage, not the used capacity.
         var columns = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        return columns.Length >= 5 ? $"可用 {columns[3]} / 总计 {columns[1]}（已用 {columns[4]}）" : line.Trim();
+        return columns.Length >= 5 ? $"可用 {columns[3]} / 总计 {columns[1]}（已用 {columns[2]}）" : line.Trim();
     }
 }

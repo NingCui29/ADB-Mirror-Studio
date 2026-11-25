@@ -105,6 +105,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             ?? throw new InvalidOperationException("MainViewModel 必须在 UI 线程创建。");
         _timeProvider = timeProvider ?? TimeProvider.System;
         _mirrorSessions.SessionChanged += OnSessionChanged;
+        Sessions.CollectionChanged += (_, _) => NotifyTasksState();
     }
 
     public ObservableCollection<DeviceCardViewModel> Devices { get; } = [];
@@ -143,7 +144,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public string StatusText
     {
         get => _statusText;
-        private set
+        set
         {
             if (_disposed) return;
             if (SetField(ref _statusText, value))
@@ -292,8 +293,29 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             if (SetField(ref _isUpdateDownloading, value))
             {
                 OnPropertyChanged(nameof(CanDownloadAndInstallUpdate));
+                NotifyTasksState();
             }
         }
+    }
+    public int ActiveTaskCount
+    {
+        get
+        {
+            var count = Sessions.Count;
+            if (IsTransferRunning) count++;
+            if (IsUpdateDownloading) count++;
+            if (IsShellCommandRunning) count++;
+            return count;
+        }
+    }
+    public bool HasActiveTasks => ActiveTaskCount > 0;
+    public string ActiveTaskCountLabel => ActiveTaskCount.ToString();
+
+    private void NotifyTasksState()
+    {
+        OnPropertyChanged(nameof(ActiveTaskCount));
+        OnPropertyChanged(nameof(HasActiveTasks));
+        OnPropertyChanged(nameof(ActiveTaskCountLabel));
     }
     public double UpdateDownloadProgress
     {
@@ -503,6 +525,51 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         && !string.IsNullOrWhiteSpace(SelectedAppPackage);
     public bool CanArrangeMirrorWindows => IsIdle && Sessions.Count > 1;
 
+    public DeviceState? SelectedDeviceState => Devices.FirstOrDefault(device =>
+        string.Equals(device.Serial, SelectedDeviceSerial, StringComparison.Ordinal))?.State;
+
+    public bool HasSelectedDeviceWarning => HasSelectedDevice && SelectedDeviceState switch
+    {
+        DeviceState.Unauthorized or DeviceState.Offline or DeviceState.Recovery or DeviceState.Bootloader or DeviceState.Error => true,
+        _ => false
+    };
+
+    public string SelectedDeviceWarningTitle => SelectedDeviceState switch
+    {
+        DeviceState.Unauthorized => "设备未授权",
+        DeviceState.Offline => "设备已离线",
+        DeviceState.Recovery => "设备处于 Recovery 模式",
+        DeviceState.Bootloader => "设备处于 Bootloader 模式",
+        DeviceState.Error => "设备状态异常",
+        _ => string.Empty
+    };
+
+    public string SelectedDeviceWarningMessage => SelectedDeviceState switch
+    {
+        DeviceState.Unauthorized => "请解锁手机屏幕，在弹出的“允许 USB 调试吗？”对话框中勾选“一律允许使用这台计算机进行调试”并点击确定。",
+        DeviceState.Offline => "设备当前不可访问，请检查 USB 数据线或无线网络连接；也可尝试重新插拔或点击侧边栏刷新。",
+        DeviceState.Recovery => "设备当前处于恢复模式，无法执行常规屏幕镜像或应用管理操作。",
+        DeviceState.Bootloader => "设备当前处于引导加载模式，无法执行 ADB 调试指令。",
+        DeviceState.Error => "设备通信发生错误，请重新连接设备或在设置中运行系统健康诊断。",
+        _ => string.Empty
+    };
+
+    public InfoBarSeverity SelectedDeviceWarningSeverity => SelectedDeviceState switch
+    {
+        DeviceState.Unauthorized => InfoBarSeverity.Warning,
+        DeviceState.Offline or DeviceState.Error => InfoBarSeverity.Error,
+        _ => InfoBarSeverity.Warning
+    };
+
+    private void NotifySelectedDeviceWarningState()
+    {
+        OnPropertyChanged(nameof(SelectedDeviceState));
+        OnPropertyChanged(nameof(HasSelectedDeviceWarning));
+        OnPropertyChanged(nameof(SelectedDeviceWarningTitle));
+        OnPropertyChanged(nameof(SelectedDeviceWarningMessage));
+        OnPropertyChanged(nameof(SelectedDeviceWarningSeverity));
+    }
+
     private void NotifySelectedMirrorState()
     {
         OnPropertyChanged(nameof(SelectedDeviceIsMirroring));
@@ -512,6 +579,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         OnPropertyChanged(nameof(SelectedMirrorDescription));
         OnPropertyChanged(nameof(CanStartSelectedMirror));
         OnPropertyChanged(nameof(CanStopSelectedMirror));
+        NotifySelectedDeviceWarningState();
     }
     public string? SelectedAppPackage
     {
@@ -539,7 +607,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool IsShellCommandRunning
     {
         get => _isShellCommandRunning;
-        private set => SetField(ref _isShellCommandRunning, value);
+        private set
+        {
+            if (SetField(ref _isShellCommandRunning, value))
+            {
+                NotifyTasksState();
+            }
+        }
     }
 
     public string GetDeviceLabel(string? serial)
@@ -595,6 +669,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         if (_disposed) return;
         var loadedSettings = await _settingsStore.LoadAsync(_lifetimeToken);
+        var loadWarning = _settingsStore.LastLoadWarning;
         if (_disposed) return;
         var upgradedSettings = loadedSettings.UpgradeConnectionHistory();
         var normalizedHistory = NormalizeConnectionEndpoints(upgradedSettings.RememberedEndpoints);
@@ -625,6 +700,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         await DiscoverAsync();
         if (_disposed) return;
         await RefreshAsync();
+        if (!_disposed && loadWarning is not null) StatusText = loadWarning;
     }
 
     public async Task SetThemeAsync(string theme)
@@ -751,6 +827,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             return;
         }
         OnPropertyChanged(nameof(IsTransferRunning));
+        NotifyTasksState();
 
         var transferCancellation = CancellationTokenSource.CreateLinkedTokenSource(_lifetimeToken);
         _transferCancellation = transferCancellation;
@@ -810,6 +887,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             transferCancellation.Dispose();
             Interlocked.Exchange(ref _transferRunning, 0);
             OnPropertyChanged(nameof(IsTransferRunning));
+            NotifyTasksState();
             ExitBusy();
         }
     }
@@ -1449,10 +1527,23 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public async Task SendDeviceKeyAsync(int keyCode)
+    public Task SendDeviceKeyAsync(int keyCode) => SendDeviceKeyAsync(SelectedDeviceSerial, keyCode);
+
+    internal bool CanUseMirrorSession(MirrorSession target, bool requiresControl = false) =>
+        !_disposed && _mirrorSessions.ActiveSessions.Any(active => active.Id == target.Id
+            && active.DeviceSerial == target.DeviceSerial && active.State == MirrorSessionState.Running
+            && (!requiresControl || active.Profile?.ReadOnly != true));
+
+    internal Task SendMirrorKeyAsync(MirrorSession session, int keyCode) =>
+        CanUseMirrorSession(session, requiresControl: true)
+            ? SendDeviceKeyAsync(session.DeviceSerial, keyCode) : Task.CompletedTask;
+
+    internal Task CaptureMirrorScreenshotAsync(MirrorSession session, string localPath) =>
+        CanUseMirrorSession(session) ? CaptureScreenshotAsync(session.DeviceSerial, localPath) : Task.CompletedTask;
+
+    private async Task SendDeviceKeyAsync(string? serial, int keyCode)
     {
         if (_disposed) return;
-        var serial = SelectedDeviceSerial;
         if (string.IsNullOrWhiteSpace(serial))
         {
             StatusText = "请选择一台目标设备";
@@ -1917,6 +2008,13 @@ public sealed record DiagnosticItemViewModel(DiagnosticItem Item)
         DiagnosticSeverity.Error => "\uEA39",
         _ => "\uE946"
     };
+    public Brush SeverityBrush => new SolidColorBrush(Item.Severity switch
+    {
+        DiagnosticSeverity.Success => ColorHelper.FromArgb(255, 48, 200, 117),
+        DiagnosticSeverity.Warning => ColorHelper.FromArgb(255, 234, 163, 0),
+        DiagnosticSeverity.Error => ColorHelper.FromArgb(255, 232, 93, 93),
+        _ => ColorHelper.FromArgb(255, 138, 138, 138)
+    });
 }
 
 public sealed record InstalledAppViewModel(InstalledApp App)

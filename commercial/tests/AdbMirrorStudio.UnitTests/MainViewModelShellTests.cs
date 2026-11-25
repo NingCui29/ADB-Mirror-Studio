@@ -8,17 +8,17 @@ public sealed partial class MainViewModelBehaviorTests
         var adb = new FakeAdb();
         using var model = Create(adb);
 
-        await model.RunDeviceShellCommandAsync("selected-device", "adb shell pm list packages | findstr com.tp");
+        await model.RunDeviceShellCommandAsync("selected-device", "adb shell pm list packages | findstr com.android");
 
         Assert.Empty(adb.ShellCommands);
-        Assert.Contains("pm list packages com.tp", model.ShellOutput);
+        Assert.Contains("pm list packages com.android", model.ShellOutput);
         Assert.Contains("未执行", model.StatusText);
         Assert.False(model.IsBusy);
         Assert.False(model.IsShellCommandRunning);
 
-        await model.RunDeviceShellCommandAsync("selected-device", "pm list packages com.tp");
+        await model.RunDeviceShellCommandAsync("selected-device", "pm list packages com.android");
 
-        Assert.Equal(("selected-device", "pm list packages com.tp"), Assert.Single(adb.ShellCommands));
+        Assert.Equal(("selected-device", "pm list packages com.android"), Assert.Single(adb.ShellCommands));
         Assert.DoesNotContain("输入提示", model.ShellOutput);
     }
 

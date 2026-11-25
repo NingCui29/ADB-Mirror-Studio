@@ -40,28 +40,50 @@ public sealed class JsonAppSettingsStoreTests : IDisposable
     }
 
     [Fact]
-    public async Task Load_CorruptFile_ReturnsDefaults()
+    public async Task Load_CorruptFile_ReturnsDefaults_AndPreservesTheOriginalFile()
     {
         Directory.CreateDirectory(_directory);
         var path = Path.Combine(_directory, "settings.json");
         await File.WriteAllTextAsync(path, "{not-json");
+        var store = new JsonAppSettingsStore(path);
 
-        var actual = await new JsonAppSettingsStore(path).LoadAsync();
+        var actual = await store.LoadAsync();
 
         Assert.Equal(AppSettings.Default, actual);
+        Assert.Contains("损坏", store.LastLoadWarning!);
+        Assert.False(File.Exists(path));
+        var backup = Assert.Single(Directory.GetFiles(_directory));
+        Assert.Contains(".corrupt-", backup);
+        Assert.Equal("{not-json", await File.ReadAllTextAsync(backup));
     }
 
     [Fact]
-    public async Task Load_LockedFile_ReturnsDefaults()
+    public async Task Load_LockedFile_ReturnsDefaults_WithoutDeletingTheOriginal()
     {
         Directory.CreateDirectory(_directory);
         var path = Path.Combine(_directory, "settings.json");
         await File.WriteAllTextAsync(path, "{}");
         await using var lockStream = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        var store = new JsonAppSettingsStore(path);
 
-        var actual = await new JsonAppSettingsStore(path).LoadAsync();
+        var actual = await store.LoadAsync();
 
         Assert.Equal(AppSettings.Default, actual);
+        Assert.Contains("暂时不可读取", store.LastLoadWarning!);
+        Assert.True(File.Exists(path));
+        Assert.Equal([path], Directory.GetFiles(_directory));
+    }
+
+    [Fact]
+    public async Task Load_AfterSuccessfulRoundTrip_HasNoWarning()
+    {
+        var store = new JsonAppSettingsStore(Path.Combine(_directory, "settings.json"));
+        await store.SaveAsync(AppSettings.Default with { Theme = "Dark" });
+
+        var actual = await store.LoadAsync();
+
+        Assert.Equal("Dark", actual.Theme);
+        Assert.Null(store.LastLoadWarning);
     }
 
     [Fact]

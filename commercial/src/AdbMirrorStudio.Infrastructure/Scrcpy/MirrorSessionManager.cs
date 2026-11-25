@@ -47,6 +47,11 @@ public sealed class MirrorSessionManager : IMirrorSessionManager
     public IReadOnlyCollection<MirrorSession> ActiveSessions =>
         _sessions.Values.Select(value => value.Session).ToArray();
 
+    public nint GetWindowHandle(MirrorSession session) =>
+        _sessions.TryGetValue(session.DeviceSerial, out var managed)
+        && managed.Session.Id == session.Id && managed.Session.State == MirrorSessionState.Running
+            ? TryGetWindowHandle(managed.Process) : 0;
+
     public async Task<MirrorSession> StartAsync(
         string deviceSerial,
         MirrorProfile profile,

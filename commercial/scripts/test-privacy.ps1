@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 )
 
@@ -16,8 +16,14 @@ try {
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
     $startInfo.StandardOutputEncoding = [Text.UTF8Encoding]::new($false)
-    foreach ($argument in @('ls-files', '--cached', '--others', '--exclude-standard', '-z')) {
-        $startInfo.ArgumentList.Add($argument)
+    $arguments = @('ls-files', '--cached', '--others', '--exclude-standard', '-z')
+    if ($startInfo.PSObject.Properties['ArgumentList'] -and $startInfo.ArgumentList -ne $null) {
+        foreach ($argument in $arguments) {
+            $startInfo.ArgumentList.Add($argument)
+        }
+    }
+    else {
+        $startInfo.Arguments = $arguments -join ' '
     }
     $gitProcess = [Diagnostics.Process]::new()
     $gitProcess.StartInfo = $startInfo

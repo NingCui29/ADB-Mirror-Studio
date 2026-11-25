@@ -14,6 +14,44 @@ namespace AdbMirrorStudio.UnitTests;
 
 public sealed partial class MainViewModelBehaviorTests
 {
+    [Fact]
+    public async Task MirrorToolbar_ControlsAndScreenshotsStayWithTheirOwnSession()
+    {
+        var adb = new FakeAdb();
+        var first = new MirrorSession("one", "device-one", MirrorSessionState.Running, 101, DateTimeOffset.UtcNow);
+        var second = new MirrorSession("two", "device-two", MirrorSessionState.Running, 102, DateTimeOffset.UtcNow);
+        var mirrors = new FakeMirror { ActiveSessions = [first, second] };
+        using var model = Create(adb, mirrors);
+
+        model.SelectedDeviceSerial = second.DeviceSerial;
+        await model.SendMirrorKeyAsync(first, 4);
+        await model.CaptureMirrorScreenshotAsync(first, "first.png");
+        model.SelectedDeviceSerial = first.DeviceSerial;
+        await model.SendMirrorKeyAsync(second, 3);
+        await model.CaptureMirrorScreenshotAsync(second, "second.png");
+
+        Assert.Equal([("device-one", 4), ("device-two", 3)], adb.KeyEvents);
+        Assert.Equal([("device-one", "first.png"), ("device-two", "second.png")], adb.Screenshots);
+    }
+
+    [Fact]
+    public async Task MirrorToolbar_RejectsStaleSessionsAndDisablesKeysForReadOnlyMirrors()
+    {
+        var adb = new FakeAdb();
+        var previous = new MirrorSession("old", "device", MirrorSessionState.Running, 101, DateTimeOffset.UtcNow);
+        var current = previous with { Id = "new", ProcessId = 102, Profile = MirrorProfile.Balanced with { ReadOnly = true } };
+        var mirrors = new FakeMirror { ActiveSessions = [current] };
+        using var model = Create(adb, mirrors);
+
+        await model.SendMirrorKeyAsync(previous, 4);
+        await model.CaptureMirrorScreenshotAsync(previous, "stale.png");
+        await model.SendMirrorKeyAsync(current, 26);
+        await model.CaptureMirrorScreenshotAsync(current, "current.png");
+
+        Assert.Empty(adb.KeyEvents);
+        Assert.Equal(("device", "current.png"), Assert.Single(adb.Screenshots));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -697,7 +735,20 @@ public sealed partial class MainViewModelBehaviorTests
             PerformanceCalls.Add((serial, cancellationToken));
             return Performance?.Invoke(serial, cancellationToken) ?? throw new NotSupportedException();
         }
-        public Task<string> CaptureScreenshotAsync(string serial, string localPath, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public List<(string Serial, int Key)> KeyEvents { get; } = [];
+        public List<(string Serial, string Path)> Screenshots { get; } = [];
+
+        public Task SendKeyEventAsync(string serial, int keyCode, CancellationToken cancellationToken = default)
+        {
+            KeyEvents.Add((serial, keyCode));
+            return Task.CompletedTask;
+        }
+
+        public Task<string> CaptureScreenshotAsync(string serial, string localPath, CancellationToken cancellationToken = default)
+        {
+            Screenshots.Add((serial, localPath));
+            return Task.FromResult(localPath);
+        }
         public Task<string> GetLogcatSnapshotAsync(string serial, int maxLines = 500, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<string> PullFileAsync(string serial, string remotePath, string localDirectory, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<InstalledApp>> GetInstalledAppsAsync(string serial, bool includeSystemApps = false, CancellationToken cancellationToken = default) => GetApps?.Invoke(cancellationToken) ?? Task.FromResult<IReadOnlyList<InstalledApp>>([new("loaded.app")]);

@@ -1,4 +1,4 @@
-param([string]$NsisCompilerPath, [string]$AppBuildDirectory)
+﻿param([string]$NsisCompilerPath, [string]$AppBuildDirectory)
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'release-common.ps1')
@@ -19,7 +19,7 @@ function Assert-PrivacyRejects([string]$ExpectedPath) {
     $message = ''
     try { $null = & $privacyAudit -RepositoryRoot $fixtureRepo }
     catch { $message = $_.Exception.Message }
-    Assert-ScriptCondition ($message.Contains($ExpectedPath, [StringComparison]::Ordinal)) '隐私审计未识别预期文件。'
+    Assert-ScriptCondition ($message.Contains($ExpectedPath)) '隐私审计未识别预期文件。'
 }
 
 Assert-ReleaseChildPath -Root $temporaryRoot -Path $fixtureRoot
@@ -65,13 +65,30 @@ try {
     New-Item -ItemType Directory -Path $versionApp -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $commercialRoot 'src\AdbMirrorStudio.App\app.manifest') -Destination $versionApp
     Copy-Item -LiteralPath (Join-Path $commercialRoot 'src\AdbMirrorStudio.App\Package.appxmanifest') -Destination $versionApp
-    [xml]$versionProperties = Get-Content -LiteralPath (Join-Path $commercialRoot 'Directory.Build.props') -Raw
+    [xml]$versionProperties = Get-Content -LiteralPath (Join-Path $commercialRoot 'Directory.Build.props') -Encoding UTF8 -Raw
     $versionProperties.Project.PropertyGroup.FileVersion = '0.0.0.0'
     $versionProperties.Save((Join-Path $versionFixture 'Directory.Build.props'))
     $versionMismatchRejected = $false
     try { $null = Get-ReleaseVersion -CommercialRoot $versionFixture }
     catch { $versionMismatchRejected = $_.Exception.Message.Contains('FileVersion') }
     Assert-ScriptCondition $versionMismatchRejected '不一致的文件版本未被拒绝。'
+    $datedVersion = "V$($version.Version)-2000.02.29"
+    Assert-ReleaseProductVersion -ProductVersion $datedVersion -ExpectedFileVersion $version.FileVersion -ExpectedBuildDate '2000.02.29'
+    $passed++
+    foreach ($case in @(
+        @{ Version = "V$($version.Version)"; Error = '完整版本必须为' }
+        @{ Version = 'V0.0.0-2000.02.29'; Error = '完整版本必须为' }
+        @{ Version = "V$($version.Version)-2000.2.29"; Error = '构建日期无效' }
+        @{ Version = "V$($version.Version)-2001.02.29"; Error = '构建日期无效' }
+        @{ Version = "V$($version.Version)-2000.02.28"; Error = '构建日期应为' }
+    )) {
+        $reason = ''
+        try {
+            Assert-ReleaseProductVersion -ProductVersion $case.Version -ExpectedFileVersion $version.FileVersion -ExpectedBuildDate '2000.02.29'
+        }
+        catch { $reason = $_.Exception.Message }
+        Assert-ScriptCondition ($reason.Contains($case.Error)) "未正确拒绝完整版本 $($case.Version)。"
+    }
     Assert-ReleaseChildPath -Root $fixtureRoot -Path (Join-Path $fixtureRoot 'artifacts\staging')
     $escapedPathRejected = $false
     try { Assert-ReleaseChildPath -Root $fixtureRoot -Path ($fixtureRoot + '-sibling\staging') }
@@ -115,13 +132,14 @@ try {
     [IO.File]::WriteAllText((Join-Path $payload 'Tools\nested\中文 $file.dll'), 'fixture')
     $uninstallInclude = Join-Path $fixtureRoot 'uninstall.nsh'
     Write-UninstallPayloadInclude -PayloadDirectory $payload -OutputPath $uninstallInclude
-    $manifest = Get-Content -LiteralPath $uninstallInclude -Raw
+    $manifest = Get-Content -LiteralPath $uninstallInclude -Encoding UTF8 -Raw
     Assert-ScriptCondition ($manifest.Contains('Delete "$INSTDIR\Tools\nested\中文 $$file.dll"')) '卸载清单未正确引用文件名。'
     Assert-ScriptCondition (-not $manifest.Contains('RMDir /r')) '卸载清单不应递归删除用户目录。'
     Assert-ScriptCondition ($manifest.IndexOf('RMDir "$INSTDIR\Tools\nested"') -lt $manifest.IndexOf('RMDir "$INSTDIR\Tools"')) '卸载目录未按从深到浅的顺序清理。'
-    $installerSource = Get-Content -LiteralPath (Join-Path $commercialRoot 'installer\AdbMirrorStudio.nsi') -Raw
+    $installerSource = Get-Content -LiteralPath (Join-Path $commercialRoot 'installer\AdbMirrorStudio.nsi') -Encoding UTF8 -Raw
     Assert-ScriptCondition ($installerSource.Contains('!insertmacro RemoveInstalledPayload') -and -not $installerSource.Contains('RMDir /r "$INSTDIR"')) '安装器未使用精确卸载清单。'
-    Assert-ScriptCondition (-not $installerSource.Contains('taskkill.exe') -and $installerSource.Contains('!insertmacro EnsureApplicationClosed Install') -and $installerSource.Contains('!insertmacro EnsureApplicationClosed Uninstall')) '安装器不应强制结束同名进程及录屏。'
+    Assert-ScriptCondition (-not $installerSource.Contains('taskkill.exe') -and $installerSource.Contains('!insertmacro EnsureApplicationClosed Install') -and $installerSource.Contains('!insertmacro EnsureApplicationClosed Uninstall')) '安装器和卸载器应检查文件占用，且不得按进程名批量结束进程。'
+    Assert-ScriptCondition ($installerSource -match '(?s)\$\{Prefix\}Prompt:\s+IfSilent \$\{Prefix\}Abort.*?MessageBox MB_YESNO[^\r\n]*ForceCloseApplicationPrompt[^\r\n]*IDNO \$\{Prefix\}Abort\s+Push "Force"\s+Call RunCloseInstalledApp') '强制关闭必须由交互式用户确认。'
 
     if (-not [string]::IsNullOrWhiteSpace($AppBuildDirectory)) {
         $releasePayload = Join-Path $fixtureRoot 'release-payload'
@@ -153,11 +171,14 @@ try {
         $license = Join-Path $fixtureRoot 'license.txt'
         [IO.File]::WriteAllText($license, 'Test license')
         $compilerArguments = @('/INPUTCHARSET', 'UTF8', '/WX', '/V2', '/PPO',
-            "/DAPP_VERSION=$($version.Version)", "/DAPP_FILE_VERSION=$($version.FileVersion)",
+            "/DAPP_FILE_VERSION=$($version.FileVersion)",
+            "/DAPP_DISPLAY_VERSION=$datedVersion",
             "/DSOURCE_DIR=$payload", "/DLICENSE_FILE=$license", "/DOUTPUT_DIR=$fixtureRoot",
             "/DUNINSTALL_INCLUDE=$uninstallInclude", (Join-Path $commercialRoot 'installer\AdbMirrorStudio.nsi'))
-        $null = & $NsisCompilerPath @compilerArguments
+        $preprocessed = & $NsisCompilerPath @compilerArguments
         Assert-ScriptCondition ($LASTEXITCODE -eq 0) 'NSIS 预处理验证失败。'
+        $datedInstallerName = [regex]::Escape("ADB-Mirror-Studio-Setup-$datedVersion-win-x64.exe")
+        Assert-ScriptCondition (($preprocessed -join "`n") -match "(?m)^OutFile .*$datedInstallerName") '安装包文件名缺少完整版本。'
     }
     Write-Output "发行脚本验证通过：$passed 项检查；未构建发行包或运行安装器。"
 }

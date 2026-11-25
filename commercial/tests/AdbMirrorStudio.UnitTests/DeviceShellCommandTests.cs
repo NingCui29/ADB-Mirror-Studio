@@ -5,7 +5,7 @@ namespace AdbMirrorStudio.UnitTests;
 public sealed class DeviceShellCommandTests
 {
     [Theory]
-    [InlineData("adb shell pm list packages | findstr com.tp")]
+    [InlineData("adb shell pm list packages | findstr com.android")]
     [InlineData("  adb\t-s other-device shell reboot  ")]
     [InlineData("ADB.EXE shell getprop")]
     [InlineData(".\\adb.exe -s other-device shell getprop")]
@@ -17,16 +17,16 @@ public sealed class DeviceShellCommandTests
         var error = Assert.Throws<ArgumentException>(() => DeviceShellCommand.Validate(command));
 
         Assert.Contains("Android 设备 Shell", error.Message);
-        Assert.Contains("pm list packages com.tp", error.Message);
+        Assert.Contains("pm list packages com.android", error.Message);
     }
 
     [Theory]
-    [InlineData("pm list packages com.tp")]
-    [InlineData("pm list packages | grep -F 'com.tp'")]
+    [InlineData("pm list packages com.android")]
+    [InlineData("pm list packages | grep -F 'com.android'")]
     [InlineData("echo 'adb shell'")]
     [InlineData("printf '%s' \"C:\\Android SDK\\adb.exe\"")]
     [InlineData("printf '%s' 'findstr: not found'")]
-    [InlineData("pm list packages | findstr com.tp")]
+    [InlineData("pm list packages | findstr com.android")]
     [InlineData("printf '%s' \"a'b\" | wc -c")]
     [InlineData("getprop ro.product.model && getprop ro.build.version.sdk")]
     [InlineData("adbd --help")]

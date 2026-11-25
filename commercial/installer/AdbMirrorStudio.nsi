@@ -7,11 +7,11 @@ CRCCheck on
 !include "LogicLib.nsh"
 !include "x64.nsh"
 
-!ifndef APP_VERSION
-  !error "APP_VERSION must come from Directory.Build.props via build-installer.ps1."
-!endif
 !ifndef APP_FILE_VERSION
   !error "APP_FILE_VERSION must come from Directory.Build.props via build-installer.ps1."
+!endif
+!ifndef APP_DISPLAY_VERSION
+  !error "APP_DISPLAY_VERSION must come from the verified portable package via build-installer.ps1."
 !endif
 !ifndef UNINSTALL_INCLUDE
   !error "UNINSTALL_INCLUDE must point to the generated payload removal manifest."
@@ -36,9 +36,9 @@ CRCCheck on
 !define UNINSTALL_REGISTRY_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\{8AD894DA-F472-495E-9266-D074F1EA586E}_ADBMirrorStudio"
 !define REPOSITORY_URL "https://github.com/NingCui29/ADB-Mirror-Studio"
 
-Name "${APP_NAME} V${APP_VERSION}"
-Caption "${APP_NAME} V${APP_VERSION} 安装程序"
-OutFile "${OUTPUT_DIR}\ADB-Mirror-Studio-Setup-V${APP_VERSION}-win-x64.exe"
+Name "${APP_NAME} ${APP_DISPLAY_VERSION}"
+Caption "${APP_NAME} ${APP_DISPLAY_VERSION} 安装程序"
+OutFile "${OUTPUT_DIR}\ADB-Mirror-Studio-Setup-${APP_DISPLAY_VERSION}-win-x64.exe"
 InstallDir "$LOCALAPPDATA\Programs\ADB Mirror Studio"
 InstallDirRegKey HKCU "${APP_REGISTRY_KEY}" "InstallDir"
 Icon "..\src\AdbMirrorStudio.App\Assets\AppIcon.ico"
@@ -51,12 +51,12 @@ ManifestDPIAware true
 VIProductVersion "${APP_FILE_VERSION}"
 VIFileVersion "${APP_FILE_VERSION}"
 VIAddVersionKey /LANG=1033 "ProductName" "${APP_NAME}"
-VIAddVersionKey /LANG=1033 "ProductVersion" "V${APP_VERSION}"
+VIAddVersionKey /LANG=1033 "ProductVersion" "${APP_DISPLAY_VERSION}"
 VIAddVersionKey /LANG=1033 "FileVersion" "${APP_FILE_VERSION}"
 VIAddVersionKey /LANG=1033 "CompanyName" "ADB Mirror Studio"
 VIAddVersionKey /LANG=1033 "FileDescription" "${APP_NAME} installer"
 VIAddVersionKey /LANG=1033 "LegalCopyright" "Copyright (C) 2026 ADB Mirror Studio contributors"
-VIAddVersionKey /LANG=1033 "OriginalFilename" "ADB-Mirror-Studio-Setup-V${APP_VERSION}-win-x64.exe"
+VIAddVersionKey /LANG=1033 "OriginalFilename" "ADB-Mirror-Studio-Setup-${APP_DISPLAY_VERSION}-win-x64.exe"
 
 !ifdef SIGN_COMMAND
   !finalize '${SIGN_COMMAND}'
@@ -97,6 +97,10 @@ LangString UnsupportedArchitecture ${LANG_SIMPCHINESE} "ADB Mirror Studio 仅支
 LangString UnsupportedArchitecture ${LANG_ENGLISH} "ADB Mirror Studio requires 64-bit Windows."
 LangString CloseApplicationPrompt ${LANG_SIMPCHINESE} "安装目录中的 ADB Mirror Studio 正在运行或文件被占用。请先停止录屏并正常退出软件，然后重试。"
 LangString CloseApplicationPrompt ${LANG_ENGLISH} "ADB Mirror Studio in the installation directory is running or its files are in use. Stop recording and exit the application, then retry."
+LangString ClosingApplication ${LANG_SIMPCHINESE} "正在等待当前安装目录中的程序退出…"
+LangString ClosingApplication ${LANG_ENGLISH} "Waiting for the application in the installation directory to close…"
+LangString ForceCloseApplicationPrompt ${LANG_SIMPCHINESE} "当前安装目录中的 ADB Mirror Studio 或随包工具未能退出。是否强制关闭并继续安装？$\r$\n$\r$\n正在录制的文件可能不完整。"
+LangString ForceCloseApplicationPrompt ${LANG_ENGLISH} "ADB Mirror Studio or its bundled tools are still running in this installation directory. Force them to close and continue installation?$\r$\n$\r$\nActive recordings may be incomplete."
 LangString RemoveUserDataPrompt ${LANG_SIMPCHINESE} "是否同时删除本机设置和崩溃日志？$\r$\n$LOCALAPPDATA\AdbMirrorStudio$\r$\n$\r$\n选择“否”可在以后重新安装时保留设置。"
 LangString RemoveUserDataPrompt ${LANG_ENGLISH} "Also delete local settings and crash logs?$\r$\n$LOCALAPPDATA\AdbMirrorStudio$\r$\n$\r$\nChoose No to preserve settings for a future installation."
 
@@ -109,24 +113,67 @@ Function .onInit
   SetRegView 64
 FunctionEnd
 
+Function RunCloseInstalledApp
+  Exch $R8
+  InitPluginsDir
+  File /oname=$PLUGINSDIR\Close-InstalledApp.ps1 "Close-InstalledApp.ps1"
+  ; The x86 installer uses 64-bit PowerShell to inspect the x64 application.
+  nsExec::Exec /TIMEOUT=5000 '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\Close-InstalledApp.ps1" -InstallDirectory "$INSTDIR\." -Action "$R8"'
+  Pop $R9
+  Pop $R8
+FunctionEnd
+
+!macro CheckApplicationFile Path Busy
+  ${If} ${FileExists} "$INSTDIR\${Path}"
+    ; OPEN_EXISTING with write access detects a running image without modifying the file.
+    System::Call 'kernel32::CreateFileW(w "$INSTDIR\${Path}", i 0x40000000, i 0, p 0, i 3, i 0, p 0) p.r0'
+    StrCmp $0 -1 ${Busy}
+    System::Call 'kernel32::CloseHandle(p r0)'
+  ${EndIf}
+!macroend
+
 !macro EnsureApplicationClosed Prefix
 ${Prefix}WaitStart:
   StrCpy $1 30
+!if "${Prefix}" == "Install"
+  StrCpy $2 "Request"
+!endif
 ${Prefix}Retry:
-  IfFileExists "$INSTDIR\${APP_EXE}" 0 ${Prefix}Ready
-  ; OPEN_EXISTING with write access detects a running image without modifying the file.
-  System::Call 'kernel32::CreateFileW(w "$INSTDIR\${APP_EXE}", i 0x40000000, i 0, p 0, i 3, i 0, p 0) p.r0'
-  StrCmp $0 -1 ${Prefix}Busy
-  System::Call 'kernel32::CloseHandle(p r0)'
+  !insertmacro CheckApplicationFile "${APP_EXE}" ${Prefix}Busy
+!if "${Prefix}" == "Install"
+  !insertmacro CheckApplicationFile "Tools\adb.exe" ${Prefix}Busy
+  !insertmacro CheckApplicationFile "Tools\scrcpy.exe" ${Prefix}Busy
+!endif
   Goto ${Prefix}Ready
 ${Prefix}Busy:
-  ; In-app updates launch the installer before asynchronous application shutdown completes.
+!if "${Prefix}" == "Install"
+  ${If} $2 == "Request"
+    StrCpy $2 "Waiting"
+    DetailPrint "$(ClosingApplication)"
+    Push "Request"
+    Call RunCloseInstalledApp
+  ${EndIf}
+!endif
   IntCmp $1 0 ${Prefix}Prompt
   Sleep 1000
   IntOp $1 $1 - 1
   Goto ${Prefix}Retry
 ${Prefix}Prompt:
   IfSilent ${Prefix}Abort
+!if "${Prefix}" == "Install"
+  ${If} $2 == "Waiting"
+    Push "Check"
+    Call RunCloseInstalledApp
+    ${If} $R9 == 0
+      MessageBox MB_YESNO|MB_ICONEXCLAMATION|MB_DEFBUTTON2 "$(ForceCloseApplicationPrompt)" IDNO ${Prefix}Abort
+      Push "Force"
+      Call RunCloseInstalledApp
+      StrCpy $2 "Forced"
+      StrCpy $1 10
+      Goto ${Prefix}Retry
+    ${EndIf}
+  ${EndIf}
+!endif
   MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(CloseApplicationPrompt)" IDRETRY ${Prefix}WaitStart
 ${Prefix}Abort:
   SetErrorLevel 2
@@ -154,8 +201,8 @@ Section "$(MainSectionName)" MainSection
   Pop $0
 
   WriteRegStr HKCU "${APP_REGISTRY_KEY}" "InstallDir" "$INSTDIR"
-  WriteRegStr HKCU "${UNINSTALL_REGISTRY_KEY}" "DisplayName" "${APP_NAME} V${APP_VERSION}"
-  WriteRegStr HKCU "${UNINSTALL_REGISTRY_KEY}" "DisplayVersion" "${APP_VERSION}"
+  WriteRegStr HKCU "${UNINSTALL_REGISTRY_KEY}" "DisplayName" "${APP_NAME} ${APP_DISPLAY_VERSION}"
+  WriteRegStr HKCU "${UNINSTALL_REGISTRY_KEY}" "DisplayVersion" "${APP_DISPLAY_VERSION}"
   WriteRegStr HKCU "${UNINSTALL_REGISTRY_KEY}" "DisplayIcon" "$INSTDIR\${APP_EXE},0"
   WriteRegStr HKCU "${UNINSTALL_REGISTRY_KEY}" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "${UNINSTALL_REGISTRY_KEY}" "Publisher" "ADB Mirror Studio"

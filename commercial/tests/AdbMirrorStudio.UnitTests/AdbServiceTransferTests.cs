@@ -154,6 +154,7 @@ public sealed class AdbServiceTransferTests : IDisposable
 
         Assert.Equal("1080x2400", details.Resolution);
         Assert.Equal(88, details.BatteryLevel);
+        Assert.Equal("可用 60G / 总计 100G（已用 40G）", details.StorageSummary);
     }
 
     [Fact]
@@ -258,9 +259,9 @@ public sealed class AdbServiceTransferTests : IDisposable
         var service = new AdbService(runner, CreateFile("adb.exe"));
 
         var error = await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.RunShellCommandAsync("selected-device", "adb -s other-device shell pm list packages | findstr com.tp"));
+            service.RunShellCommandAsync("selected-device", "adb -s other-device shell pm list packages | findstr com.android"));
 
-        Assert.Contains("pm list packages com.tp", error.Message);
+        Assert.Contains("pm list packages com.android", error.Message);
         Assert.Empty(runner.Requests);
     }
 
@@ -273,14 +274,14 @@ public sealed class AdbServiceTransferTests : IDisposable
         var service = new AdbService(runner, CreateFile("adb.exe"));
 
         var error = await Assert.ThrowsAsync<AdbCommandException>(() =>
-            service.RunShellCommandAsync("selected-device", "pm list packages | findstr com.tp"));
+            service.RunShellCommandAsync("selected-device", "pm list packages | findstr com.android"));
 
         Assert.Equal(127, error.ExitCode);
         Assert.StartsWith(stderr, error.Message);
         Assert.Contains("partial output", error.Message);
         Assert.Contains("findstr 是 Windows 命令", error.Message);
-        Assert.Contains("pm list packages com.tp", error.Message);
-        Assert.Equal(["-s", "selected-device", "shell", "pm list packages | findstr com.tp"],
+        Assert.Contains("pm list packages com.android", error.Message);
+        Assert.Equal(["-s", "selected-device", "shell", "pm list packages | findstr com.android"],
             Assert.Single(runner.Requests).Arguments);
     }
 
@@ -310,8 +311,8 @@ public sealed class AdbServiceTransferTests : IDisposable
     [InlineData("printf '%s' 'hello world'")]
     [InlineData("printf '%s' \"a'b\" | wc -c")]
     [InlineData("getprop ro.product.model && getprop ro.build.version.sdk")]
-    [InlineData("pm list packages com.tp")]
-    [InlineData("echo 'adb shell | findstr com.tp'")]
+    [InlineData("pm list packages com.android")]
+    [InlineData("echo 'adb shell | findstr com.android'")]
     public async Task RunShellCommandAsync_PreservesCompleteRemoteShellExpression(string command)
     {
         var runner = new CapturingRunner(string.Empty);

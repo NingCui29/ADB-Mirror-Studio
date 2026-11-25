@@ -480,6 +480,69 @@ public sealed class MainPageMarkupTests
         Assert.Contains("ActivateExistingWindow", code, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void DeviceStatusWarningInfoBar_IsConfiguredInsideWorkspacePanels()
+    {
+        var infoBar = ElementNamed("DeviceStatusWarningInfoBar");
+        Assert.Equal(Ui + "InfoBar", infoBar.Name);
+        Assert.Equal("{Binding HasSelectedDeviceWarning}", (string?)infoBar.Attribute("IsOpen"));
+        Assert.Equal("{Binding SelectedDeviceWarningSeverity}", (string?)infoBar.Attribute("Severity"));
+        Assert.Equal("{Binding SelectedDeviceWarningTitle}", (string?)infoBar.Attribute("Title"));
+        Assert.Equal("{Binding SelectedDeviceWarningMessage}", (string?)infoBar.Attribute("Message"));
+        Assert.Equal("WorkspacePanels", (string?)infoBar.Parent?.Attribute(Xaml + "Name"));
+    }
+
+    [Fact]
+    public void TasksNavigationItem_ContainsActiveTaskCountBadge()
+    {
+        var tasksItem = ElementNamed("TasksNavigationItem");
+        var badge = Assert.Single(tasksItem.Descendants(Ui + "Border"),
+            border => (string?)border.Attribute("Visibility") == "{Binding HasActiveTasks, Converter={StaticResource BooleanVisibility}}");
+        var text = Assert.Single(badge.Descendants(Ui + "TextBlock"),
+            tb => (string?)tb.Attribute("Text") == "{Binding ActiveTaskCountLabel}");
+        Assert.NotNull(text);
+    }
+
+    [Fact]
+    public void MirrorLaunchCard_ConfiguredWithDirectDragDrop()
+    {
+        var mirrorCard = ElementNamed("MirrorLaunchCard");
+        Assert.Equal("True", (string?)mirrorCard.Attribute("AllowDrop"));
+        Assert.Equal("ScreenDrop_DragOver", (string?)mirrorCard.Attribute("DragOver"));
+        Assert.Equal("ScreenDrop_Drop", (string?)mirrorCard.Attribute("Drop"));
+    }
+
+    [Fact]
+    public void ScreenArea_KeepsQuickLogcatAndMovesDeviceKeysOutOfTheLaunchCard()
+    {
+        var screenArea = WorkspaceArea("屏幕");
+        Assert.DoesNotContain(screenArea.Descendants(Ui + "Button"),
+            button => (string?)button.Attribute("Click") == "DeviceKey_Click");
+
+        var quickLogcat = ElementNamed("QuickLogcatExpander");
+        Assert.NotNull(quickLogcat);
+        Assert.Contains(quickLogcat.Descendants(Ui + "Button"), b => (string?)b.Attribute("Click") == "ExportLogcat_Click");
+        Assert.Contains(quickLogcat.Descendants(Ui + "Button"), b => (string?)b.Attribute("Click") == "OpenTerminal_Click");
+        Assert.DoesNotContain(Markup.Descendants(), element => (string?)element.Attribute(Xaml + "Name") == "DeviceControlsExpander");
+    }
+
+    [Fact]
+    public void CommandPalette_OverlayAndToolbarLaunchAreConfigured()
+    {
+        var toolbar = ElementNamed("DeviceToolbar");
+        var quickCmd = Assert.Single(toolbar.Elements(Ui + "Button"), b => (string?)b.Attribute("Click") == "QuickCommand_Click");
+        Assert.Null((string?)quickCmd.Attribute("IsEnabled"));
+
+        var overlay = ElementNamed("CommandPaletteOverlay");
+        Assert.Equal("Collapsed", (string?)overlay.Attribute("Visibility"));
+        Assert.NotNull(ElementNamed("CommandSearchBox"));
+        Assert.NotNull(ElementNamed("CommandListView"));
+
+        var accelerators = Markup.Root?.Element(Ui + "Page.KeyboardAccelerators")?.Elements(Ui + "KeyboardAccelerator");
+        Assert.NotNull(accelerators);
+        Assert.Contains(accelerators, acc => (string?)acc.Attribute("Key") == "K" && (string?)acc.Attribute("Modifiers") == "Control");
+    }
+
     private static XDocument Markup => XDocument.Load(FixturePath("MainPage.xaml"));
 
     private static XElement ElementNamed(string name) => Markup.Descendants()

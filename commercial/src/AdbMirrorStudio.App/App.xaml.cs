@@ -35,7 +35,23 @@ public partial class App : Microsoft.UI.Xaml.Application
 
     public App()
     {
-        UnhandledException += (_, eventArgs) => CrashLog.Write(eventArgs.Exception);
+        UnhandledException += (_, eventArgs) =>
+        {
+            CrashLog.Write(eventArgs.Exception);
+            // WinUI terminates the process unless the XAML exception is marked handled.
+            // Event handlers are async void, so their exceptions surface here; a stray
+            // dialog or control failure must not tear down the whole application.
+            eventArgs.Handled = true;
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, eventArgs) =>
+        {
+            if (eventArgs.ExceptionObject is Exception exception) CrashLog.Write(exception);
+        };
+        TaskScheduler.UnobservedTaskException += (_, eventArgs) =>
+        {
+            CrashLog.Write(eventArgs.Exception);
+            eventArgs.SetObserved();
+        };
         InitializeComponent();
     }
 
@@ -64,7 +80,7 @@ public partial class App : Microsoft.UI.Xaml.Application
             _httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(30) };
             IUpdateService updates = new GitHubUpdateService(
                 _httpClient,
-                AppVersionInfo.ProductVersion,
+                AppVersionInfo.DisplayVersion,
                 "NingCui29",
                 "ADB-Mirror-Studio");
             IAppSettingsStore settings = new JsonAppSettingsStore(Path.Combine(

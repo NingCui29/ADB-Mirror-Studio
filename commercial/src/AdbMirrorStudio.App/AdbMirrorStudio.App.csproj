@@ -17,6 +17,9 @@
     <WindowsPackageType Condition="'$(Unpackaged)' == 'true'">None</WindowsPackageType>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- The round-trip format uses the invariant calendar for direct builds. -->
+    <PackageBuildDate Condition="'$(PackageBuildDate)' == ''">$([System.DateTime]::Now.ToString('O').Substring(0, 10).Replace('-', '.'))</PackageBuildDate>
+    <InformationalVersion>$(InformationalVersion)-$(PackageBuildDate)</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>

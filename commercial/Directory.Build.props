@@ -5,12 +5,8 @@
     <AssemblyVersion>2.0.0.0</AssemblyVersion>
     <FileVersion>2.0.0.0</FileVersion>
     <InformationalVersion>V2.0.0</InformationalVersion>
-    <ReleaseDate>2026.11.03</ReleaseDate>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Deterministic>true</Deterministic>
     <PathMap>$(MSBuildThisFileDirectory)=/_/</PathMap>
   </PropertyGroup>
-  <ItemGroup>
-    <AssemblyMetadata Include="ReleaseDate" Value="$(ReleaseDate)" />
-  </ItemGroup>
 </Project>

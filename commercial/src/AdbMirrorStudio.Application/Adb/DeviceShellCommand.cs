@@ -23,7 +23,7 @@ public static class DeviceShellCommand
             || fileName.Equals("adb.exe", StringComparison.OrdinalIgnoreCase))
         {
             throw new ArgumentException(
-                "这里已是 Android 设备 Shell，请直接输入设备命令，无需 adb 或 adb shell 前缀；目标由当前所选设备固定。查找包名示例：pm list packages com.tp。",
+                "这里已是 Android 设备 Shell，请直接输入设备命令，无需 adb 或 adb shell 前缀；目标由当前所选设备固定。查找包名示例：pm list packages com.android。",
                 nameof(command));
         }
     }

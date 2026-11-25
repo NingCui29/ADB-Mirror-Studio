@@ -1,4 +1,6 @@
 using System.Buffers;
+using System.Diagnostics;
+using System.Globalization;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json.Serialization;
@@ -14,6 +16,7 @@ public sealed class GitHubUpdateService(
     string repository) : IUpdateService
 {
     private const long MaximumInstallerSize = 1024L * 1024 * 1024;
+    private const string BuildDateFormat = "yyyy.MM.dd";
 
     public async Task<AppUpdateInfo> CheckAsync(CancellationToken cancellationToken = default)
     {
@@ -43,16 +46,16 @@ public sealed class GitHubUpdateService(
 
         var current = ParseVersion(currentVersion);
         var latest = ParseVersion(release.TagName);
-        var expectedInstallerName = $"ADB-Mirror-Studio-Setup-{NormalizeDisplayVersion(release.TagName)}-win-x64.exe";
         var asset = (release.Assets ?? []).FirstOrDefault(item =>
-            string.Equals(item.Name, expectedInstallerName, StringComparison.OrdinalIgnoreCase)
-            && IsTrustedInstallerAsset(item));
+            IsTrustedInstallerAsset(item) && IsInstallerName(item.Name, latest));
         var installer = asset is null ? null : CreateInstallerPackage(asset);
+        var isUpdateAvailable = latest.Core > current.Core
+            || (latest.Core == current.Core && Nullable.Compare(latest.BuildDate, current.BuildDate) > 0);
 
         return new AppUpdateInfo(
-            NormalizeDisplayVersion(currentVersion),
-            NormalizeDisplayVersion(release.TagName),
-            latest > current,
+            current.DisplayTag,
+            latest.DisplayTag,
+            isUpdateAvailable,
             release.HtmlUrl,
             installer,
             release.Body);
@@ -74,8 +77,8 @@ public sealed class GitHubUpdateService(
         var installer = update.Installer
             ?? throw new InvalidOperationException("新版本未提供可验证的 Windows x64 安装包。");
         ValidateInstallerPackage(installer);
-        var expectedInstallerName = $"ADB-Mirror-Studio-Setup-{NormalizeDisplayVersion(update.LatestVersion)}-win-x64.exe";
-        if (!installer.FileName.Equals(expectedInstallerName, StringComparison.OrdinalIgnoreCase))
+        var expectedVersion = ParseVersion(update.LatestVersion);
+        if (!IsInstallerName(installer.FileName, expectedVersion))
         {
             throw new InvalidOperationException("安装包文件名与目标版本不一致。");
         }
@@ -94,6 +97,7 @@ public sealed class GitHubUpdateService(
             if (new FileInfo(destinationPath).Length == installer.Size
                 && await HasExpectedHashAsync(destinationPath, installer.Sha256, cancellationToken).ConfigureAwait(false))
             {
+                ValidateInstallerVersion(destinationPath, expectedVersion);
                 progress?.Report(new UpdateDownloadProgress(installer.Size, installer.Size));
                 cancellationToken.ThrowIfCancellationRequested();
                 return destinationPath;
@@ -163,6 +167,7 @@ public sealed class GitHubUpdateService(
             {
                 throw new InvalidDataException("安装包 SHA256 校验失败，文件已删除。");
             }
+            ValidateInstallerVersion(temporaryPath, expectedVersion);
 
             cancellationToken.ThrowIfCancellationRequested();
             File.Move(temporaryPath, destinationPath, overwrite: true);
@@ -193,9 +198,9 @@ public sealed class GitHubUpdateService(
         var installer = update.Installer
             ?? throw new InvalidOperationException("新版本未提供可验证的 Windows x64 安装包。");
         ValidateInstallerPackage(installer);
-        var expectedName = $"ADB-Mirror-Studio-Setup-{NormalizeDisplayVersion(update.LatestVersion)}-win-x64.exe";
+        var expectedVersion = ParseVersion(update.LatestVersion);
         if (!update.IsUpdateAvailable
-            || !installer.FileName.Equals(expectedName, StringComparison.OrdinalIgnoreCase)
+            || !IsInstallerName(installer.FileName, expectedVersion)
             || !Path.GetFileName(installerPath).Equals(installer.FileName, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException("待启动安装包与目标版本不一致。");
@@ -210,6 +215,7 @@ public sealed class GitHubUpdateService(
             {
                 throw new InvalidDataException("安装包启动前校验失败，请重新下载。");
             }
+            ValidateInstallerVersion(installerPath, expectedVersion);
             cancellationToken.ThrowIfCancellationRequested();
             return stream;
         }
@@ -294,20 +300,50 @@ public sealed class GitHubUpdateService(
         return Convert.ToHexString(hash).Equals(normalizedHash, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static Version ParseVersion(string value)
+    private static ReleaseVersion ParseVersion(string? value)
     {
-        var normalized = value.Trim().TrimStart('v', 'V').Split(['+', '-'], 2)[0];
-        return Version.TryParse(normalized, out var version)
-            ? new Version(version.Major, version.Minor, Math.Max(0, version.Build), Math.Max(0, version.Revision))
-            : throw new FormatException($"无法识别版本号：{value}");
+        var parts = value?.Trim().TrimStart('v', 'V').Split('-', 2);
+        if (parts is null || !Version.TryParse(parts[0], out var version))
+        {
+            throw new FormatException($"无法识别版本号：{value}");
+        }
+
+        DateOnly? buildDate = null;
+        if (parts.Length == 2)
+        {
+            if (version.Build < 0 || version.Revision >= 0
+                || !DateOnly.TryParseExact(parts[1], BuildDateFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+            {
+                throw new FormatException($"完整版本号必须包含三段数字和有效的 {BuildDateFormat} 日期：{value}");
+            }
+            buildDate = date;
+        }
+
+        return new ReleaseVersion(new Version(version.Major, version.Minor, Math.Max(0, version.Build)), buildDate);
     }
 
-    private static string NormalizeDisplayVersion(string value)
+    private static bool IsInstallerName(string fileName, ReleaseVersion version) =>
+        fileName.Equals($"ADB-Mirror-Studio-Setup-{version.DisplayTag}-win-x64.exe", StringComparison.OrdinalIgnoreCase);
+
+    private static void ValidateInstallerVersion(string path, ReleaseVersion expected)
     {
-        var version = ParseVersion(value);
-        return $"V{version.Major}.{version.Minor}.{Math.Max(0, version.Build)}";
+        if (!expected.BuildDate.HasValue) return;
+
+        var actual = FileVersionInfo.GetVersionInfo(path);
+        if (!string.Equals(actual.ProductVersion, expected.DisplayTag, StringComparison.Ordinal)
+            || !string.Equals(actual.FileVersion, $"{expected.Core}.0", StringComparison.Ordinal))
+        {
+            throw new InvalidDataException($"安装包的完整版本与目标版本 {expected.DisplayTag} 不一致。");
+        }
     }
 
+    private readonly record struct ReleaseVersion(Version Core, DateOnly? BuildDate)
+    {
+        public string CoreTag => $"V{Core}";
+        public string DisplayTag => BuildDate is { } date
+            ? $"{CoreTag}-{date.ToString(BuildDateFormat, CultureInfo.InvariantCulture)}"
+            : CoreTag;
+    }
 }
 
 internal sealed record GitHubRelease(

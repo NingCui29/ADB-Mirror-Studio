@@ -7,6 +7,7 @@ namespace AdbMirrorStudio.Infrastructure.Processes;
 public sealed class ProcessCommandRunner : ICommandRunner
 {
     private const int MaxCapturedCharacters = 1_000_000;
+    private static readonly TimeSpan MaxPipeDrainGrace = TimeSpan.FromSeconds(2);
 
     public async Task<CommandResult> RunAsync(
         CommandRequest request,
@@ -18,6 +19,9 @@ public sealed class ProcessCommandRunner : ICommandRunner
         var timeout = request.Timeout ?? TimeSpan.FromSeconds(30);
         using var timeoutCts = new CancellationTokenSource(timeout);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+        // Output readers use their own token. Bounding a pipe drain must never be
+        // reported as a command timeout.
+        using var outputCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         var startInfo = new ProcessStartInfo
         {
@@ -52,18 +56,21 @@ public sealed class ProcessCommandRunner : ICommandRunner
             throw new InvalidOperationException($"无法启动进程：{request.FileName}");
         }
 
-        var stdoutTask = ReadCappedAsync(process.StandardOutput, linkedCts.Token);
-        var stderrTask = ReadCappedAsync(process.StandardError, linkedCts.Token);
+        var stdoutTask = ReadCappedAsync(process.StandardOutput, outputCts.Token);
+        var stderrTask = ReadCappedAsync(process.StandardError, outputCts.Token);
+        // Keep the aggregate task so every exit path can observe its exceptions.
+        var drainTask = Task.WhenAll(stdoutTask, stderrTask);
 
         var timedOut = false;
         var cancelled = false;
 
         try
         {
+            // This wait alone represents the command lifetime. Once the main process
+            // has exited, the command has finished, even if a descendant process
+            // still keeps the inherited output pipes open.
             await process.WaitForExitAsync(linkedCts.Token).ConfigureAwait(false);
-            // A child can keep inherited output pipes open after the main process exits.
-            await Task.WhenAll(stdoutTask, stderrTask).WaitAsync(linkedCts.Token).ConfigureAwait(false);
-            linkedCts.Token.ThrowIfCancellationRequested();
+            if (cancellationToken.IsCancellationRequested) cancelled = true;
         }
         catch (OperationCanceledException)
         {
@@ -83,13 +90,46 @@ public sealed class ProcessCommandRunner : ICommandRunner
         catch
         {
             TryKillProcessTree(process);
-            linkedCts.Cancel();
-            await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
+            outputCts.Cancel();
+            ObserveDrain(drainTask);
             throw;
         }
 
-        var stdout = await stdoutTask.ConfigureAwait(false);
-        var stderr = await stderrTask.ConfigureAwait(false);
+        // A child can keep inherited output pipes open after the main process exits.
+        // Bound the drain separately: a slow drain truncates output, it does not turn
+        // a successfully completed command into a timeout.
+        if (!drainTask.IsCompleted)
+        {
+            var grace = timeout < MaxPipeDrainGrace ? timeout : MaxPipeDrainGrace;
+            using var drainGrace = new CancellationTokenSource(grace);
+            try
+            {
+                await drainTask.WaitAsync(drainGrace.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                outputCts.Cancel();
+                ObserveDrain(drainTask);
+                // Some Windows anonymous pipes ignore cancellation. Closing the read
+                // end unblocks a pending ReadAsync so the caller cannot hang forever.
+                TryCloseReader(process.StandardOutput);
+                TryCloseReader(process.StandardError);
+            }
+        }
+
+        string stdout;
+        string stderr;
+        try
+        {
+            stdout = await stdoutTask.ConfigureAwait(false);
+            stderr = await stderrTask.ConfigureAwait(false);
+        }
+        catch
+        {
+            ObserveDrain(drainTask);
+            throw;
+        }
+
         stopwatch.Stop();
 
         return new CommandResult(
@@ -124,7 +164,14 @@ public sealed class ProcessCommandRunner : ICommandRunner
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // Return output already received when the overall command is cancelled or times out.
+            // Return output already received when the drain is cancelled or bounded.
+            truncated = true;
+        }
+        catch (Exception exception) when (exception is IOException or ObjectDisposedException)
+        {
+            // The read end was closed while a read was pending, for example after
+            // the process tree was killed. Keep whatever was already captured.
+            truncated = true;
         }
 
         if (truncated)
@@ -135,10 +182,32 @@ public sealed class ProcessCommandRunner : ICommandRunner
         return result.ToString();
     }
 
+    private static void TryCloseReader(StreamReader reader)
+    {
+        try
+        {
+            reader.Dispose();
+        }
+        catch (Exception exception) when (exception is IOException or ObjectDisposedException or InvalidOperationException)
+        {
+            // The reader may already be closed or owned by a completed read.
+        }
+    }
+
+    private static void ObserveDrain(Task drainTask) =>
+        _ = drainTask.ContinueWith(
+            static task => _ = task.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+
     private static void TryKillProcessTree(Process process)
     {
         try
         {
+            // Kill(entireProcessTree) only walks descendants while the root is alive.
+            // Orphaned descendants lose their inherited pipe handles when the drain
+            // above closes the read end.
             if (!process.HasExited) process.Kill(entireProcessTree: true);
         }
         catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)

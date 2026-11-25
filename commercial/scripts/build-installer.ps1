@@ -1,4 +1,4 @@
-param(
+﻿param(
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Release',
     [switch]$SkipPortableBuild,
@@ -7,6 +7,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.IO.Compression.FileSystem
 . (Join-Path $PSScriptRoot 'release-common.ps1')
 $commercialRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $releaseScript = Join-Path $PSScriptRoot 'build-release.ps1'
@@ -22,18 +23,28 @@ $releaseVersion = Get-ReleaseVersion -CommercialRoot $commercialRoot
 $version = $releaseVersion.Version
 $fileVersion = $releaseVersion.FileVersion
 $productVersion = "V$version"
-$portableArchive = Join-Path $releaseRoot "AdbMirrorStudio-$productVersion-win-x64.zip"
-$installerName = "ADB-Mirror-Studio-Setup-$productVersion-win-x64.exe"
-$installerPath = Join-Path $installerRoot $installerName
+$legacyPortableName = "AdbMirrorStudio-$productVersion-win-x64.zip"
+$portableArchive = $null
 
 Assert-ReleaseChildPath -Root $commercialRoot -Path $stagingDirectory
 
-if (-not $SkipPortableBuild) {
-    & $releaseScript -Configuration $Configuration
+if ($SkipPortableBuild) {
+    $datedNamePattern = '^AdbMirrorStudio-' + [regex]::Escape($productVersion) + '-[0-9]{4}\.[0-9]{2}\.[0-9]{2}-win-x64\.zip$'
+    $latestArchive = Get-ChildItem -LiteralPath $releaseRoot -File -Filter "AdbMirrorStudio-$productVersion-*-win-x64.zip" -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -cmatch $datedNamePattern } |
+        Sort-Object Name -Descending | Select-Object -First 1
+    $portableArchive = if ($latestArchive) { $latestArchive.FullName } else { Join-Path $releaseRoot $legacyPortableName }
 }
-if (-not (Test-Path -LiteralPath $portableArchive)) {
-    throw "未找到便携发行包：$portableArchive"
+else {
+    & $releaseScript -Configuration $Configuration | ForEach-Object {
+        if ($_.PSObject.Properties['Archive']) { $portableArchive = $_.Archive }
+        $_
+    }
 }
+if (-not $portableArchive -or -not (Test-Path -LiteralPath $portableArchive -PathType Leaf)) {
+    throw "未找到 $productVersion 的便携发行包，请先构建便携包。"
+}
+Assert-ReleaseChildPath -Root $commercialRoot -Path $portableArchive
 
 if ([string]::IsNullOrWhiteSpace($NsisCompilerPath)) {
     $command = Get-Command 'makensis.exe' -ErrorAction SilentlyContinue
@@ -54,11 +65,17 @@ if ([string]::IsNullOrWhiteSpace($NsisCompilerPath) -or -not (Test-Path -Literal
 New-Item -ItemType Directory -Path $payloadDirectory -Force | Out-Null
 try {
     Expand-Archive -LiteralPath $portableArchive -DestinationPath $payloadDirectory -Force
-    Assert-ReleasePayload -PayloadDirectory $payloadDirectory -ExpectedFileVersion $fileVersion
+    $displayVersion = Assert-ReleasePayload -PayloadDirectory $payloadDirectory -ExpectedFileVersion $fileVersion -PassThru
+    $portableName = [IO.Path]::GetFileName($portableArchive)
+    if ($portableName -cne "AdbMirrorStudio-$displayVersion-win-x64.zip" -and $portableName -cne $legacyPortableName) {
+        throw '便携包文件名与包内完整版本不一致。'
+    }
+    $installerName = "ADB-Mirror-Studio-Setup-$displayVersion-win-x64.exe"
+    $installerPath = Join-Path $installerRoot $installerName
     Write-UninstallPayloadInclude -PayloadDirectory $payloadDirectory -OutputPath $uninstallInclude
 
-    $privacyText = Get-Content (Join-Path $commercialRoot 'PRIVACY.md') -Raw
-    $licenseText = Get-Content (Join-Path $commercialRoot 'FREE-USE-LICENSE.md') -Raw
+    $privacyText = Get-Content (Join-Path $commercialRoot 'PRIVACY.md') -Encoding UTF8 -Raw
+    $licenseText = Get-Content (Join-Path $commercialRoot 'FREE-USE-LICENSE.md') -Encoding UTF8 -Raw
     $installerNotice = "$privacyText`r`n`r`n========================================`r`n`r`n$licenseText"
     [System.IO.File]::WriteAllText($licensePath, ($installerNotice -replace "`r?`n", "`r`n"), [System.Text.UTF8Encoding]::new($true))
     $payloadBytes = (Get-ChildItem $payloadDirectory -Recurse -File | Measure-Object -Property Length -Sum).Sum
@@ -72,8 +89,8 @@ try {
         'UTF8',
         '/WX',
         '/V3',
-        "/DAPP_VERSION=$version",
         "/DAPP_FILE_VERSION=$fileVersion",
+        "/DAPP_DISPLAY_VERSION=$displayVersion",
         "/DSOURCE_DIR=$payloadDirectory",
         "/DLICENSE_FILE=$licensePath",
         "/DOUTPUT_DIR=$stagingDirectory",
@@ -81,7 +98,7 @@ try {
         "/DESTIMATED_SIZE_KB=$estimatedSizeKb"
     )
     if (-not [string]::IsNullOrWhiteSpace($SignCommand)) {
-        if (-not $SignCommand.Contains('%1', [System.StringComparison]::Ordinal)) {
+        if (-not $SignCommand.Contains('%1')) {
             throw '签名命令必须包含由 NSIS 替换为目标文件路径的 %1 占位符。'
         }
         $compilerArguments += "/DSIGN_COMMAND=$SignCommand"
@@ -91,15 +108,22 @@ try {
     & $NsisCompilerPath @compilerArguments
     if ($LASTEXITCODE -ne 0) { throw 'NSIS 编译失败。' }
     if (-not (Test-Path -LiteralPath $stagedInstaller)) { throw '安装器未生成。' }
+    $installerVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($stagedInstaller)
+    if ($installerVersion.FileVersion -cne $fileVersion -or $installerVersion.ProductVersion -cne $displayVersion `
+        -or $installerVersion.OriginalFilename -cne $installerName) {
+        throw '安装器的版本或原始文件名与便携包不一致。'
+    }
 
     $signature = Get-AuthenticodeSignature -LiteralPath $stagedInstaller
     if (-not [string]::IsNullOrWhiteSpace($SignCommand) -and $signature.Status -ne 'Valid') {
         throw '指定了签名命令，但安装器未通过 Authenticode 签名验证。'
     }
-    [IO.File]::Move($stagedInstaller, $installerPath, $true)
+    if (Test-Path -LiteralPath $installerPath) { Remove-Item -LiteralPath $installerPath -Force }
+    [IO.File]::Move($stagedInstaller, $installerPath)
     $hash = Get-FileHash -LiteralPath $installerPath -Algorithm SHA256
     [pscustomobject]@{
         Version = $productVersion
+        DisplayVersion = $displayVersion
         Installer = $installerPath
         Sha256 = $hash.Hash
         SizeBytes = (Get-Item -LiteralPath $installerPath).Length

@@ -6,6 +6,7 @@ public interface IMirrorSessionManager : IAsyncDisposable
 {
     IReadOnlyCollection<MirrorSession> ActiveSessions { get; }
     event EventHandler<MirrorSession>? SessionChanged;
+    nint GetWindowHandle(MirrorSession session) => 0;
     Task<MirrorSession> StartAsync(
         string deviceSerial,
         MirrorProfile profile,

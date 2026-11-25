@@ -1,5 +1,6 @@
 .tools/
 .local-checks/
+.workbuddy/
 venv/
 __pycache__/
 build/

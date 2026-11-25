@@ -1,13 +1,17 @@
 using AdbMirrorStudio.App.ViewModels;
+using AdbMirrorStudio.App.Mirroring;
+using AdbMirrorStudio.Domain.Mirroring;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Navigation;
 using Windows.Storage.Pickers;
 using Windows.Storage;
 using Windows.ApplicationModel.DataTransfer;
 using WinRT.Interop;
 using System.Diagnostics;
+using Windows.System;
 
 namespace AdbMirrorStudio.App;
 
@@ -15,6 +19,7 @@ public sealed partial class MainPage : Page
 {
     private readonly DispatcherTimer _autoRefreshTimer = new() { Interval = TimeSpan.FromSeconds(5) };
     private readonly DispatcherTimer _performanceTimer = new() { Interval = TimeSpan.FromSeconds(2) };
+    private MirrorToolbarHost? _mirrorToolbars;
     private bool _initializingSettings;
     private bool _shutdown;
     private bool _synchronizingNavigation;
@@ -27,6 +32,27 @@ public sealed partial class MainPage : Page
         SelectSection("screen");
         _autoRefreshTimer.Tick += AutoRefreshTimer_Tick;
         _performanceTimer.Tick += PerformanceTimer_Tick;
+        AddHandler(KeyDownEvent, new KeyEventHandler(MainPage_KeyDown), true);
+    }
+
+    // WinUI cannot await event handlers. Application.UnhandledException is the
+    // global barrier for the async void handlers below; periodic sources are guarded
+    // locally as well so one failing device operation cannot flood the crash log.
+    private void Guard(Func<Task> operation)
+    {
+        _ = RunAsync();
+
+        async Task RunAsync()
+        {
+            try
+            {
+                await operation();
+            }
+            catch (Exception exception)
+            {
+                if (!_shutdown) CrashLog.Write(exception);
+            }
+        }
     }
 
     private void SelectSection(string section)
@@ -72,6 +98,7 @@ public sealed partial class MainPage : Page
         _initializingSettings = true;
         ViewModel = new MainViewModel(services);
         DataContext = ViewModel;
+        _mirrorToolbars = new MirrorToolbarHost(DispatcherQueue, services.MirrorSessions, RunMirrorToolbarAction);
         try
         {
             await ViewModel.InitializeAsync();
@@ -115,6 +142,7 @@ public sealed partial class MainPage : Page
         _autoRefreshTimer.Tick -= AutoRefreshTimer_Tick;
         _performanceTimer.Stop();
         _performanceTimer.Tick -= PerformanceTimer_Tick;
+        _mirrorToolbars?.Dispose();
         ViewModel?.Dispose();
     }
 
@@ -292,6 +320,12 @@ public sealed partial class MainPage : Page
         TasksNavigationItem.Focus(FocusState.Programmatic);
     }
 
+    private void OpenTerminal_Click(object sender, RoutedEventArgs e)
+    {
+        SelectSection("terminal");
+        TerminalNavigationItem.Focus(FocusState.Programmatic);
+    }
+
     private async void OpenDiagnostics_Click(object sender, RoutedEventArgs e)
     {
         SelectSection("settings");
@@ -368,14 +402,6 @@ public sealed partial class MainPage : Page
             CloseButtonText = "关闭",
             DefaultButton = ContentDialogButton.Close
         }.ShowAsync();
-    }
-
-    private async void DeviceKey_Click(object sender, RoutedEventArgs e)
-    {
-        if (ViewModel is not null && sender is FrameworkElement { Tag: string value } && int.TryParse(value, out var keyCode))
-        {
-            await ViewModel.SendDeviceKeyAsync(keyCode);
-        }
     }
 
     private async void RefreshApps_Click(object sender, RoutedEventArgs e)
@@ -475,20 +501,36 @@ public sealed partial class MainPage : Page
 
     private async void SaveScreenshot_Click(object sender, RoutedEventArgs e)
     {
-        if (ViewModel is null || Microsoft.UI.Xaml.Application.Current is not App { MainWindow: not null } app) return;
-        var serial = ViewModel.SelectedDeviceSerial;
+        if (ViewModel is not { } model || Microsoft.UI.Xaml.Application.Current is not App { MainWindow: not null } app) return;
+        var serial = model.SelectedDeviceSerial;
+        var file = await PickScreenshotPathAsync(WindowNative.GetWindowHandle(app.MainWindow));
+        if (file is not null && !_shutdown) await model.CaptureScreenshotAsync(serial, file.Path);
+    }
+
+    private void RunMirrorToolbarAction(MirrorSession session, nint toolbarWindow, int? keyCode) => Guard(async () =>
+    {
+        if (_shutdown || ViewModel is not { } model) return;
+        if (keyCode is { } key)
+        {
+            await model.SendMirrorKeyAsync(session, key);
+        }
+        else if (model.CanUseMirrorSession(session))
+        {
+            var file = await PickScreenshotPathAsync(toolbarWindow);
+            if (file is not null && !_shutdown) await model.CaptureMirrorScreenshotAsync(session, file.Path);
+        }
+    });
+
+    private static async Task<StorageFile?> PickScreenshotPathAsync(nint ownerWindow)
+    {
         var picker = new FileSavePicker
         {
             SuggestedStartLocation = PickerLocationId.PicturesLibrary,
             SuggestedFileName = $"android-screen-{DateTime.Now:yyyyMMdd-HHmmss}"
         };
         picker.FileTypeChoices.Add("PNG 图片", [".png"]);
-        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(app.MainWindow));
-        var file = await picker.PickSaveFileAsync();
-        if (file is not null && !_shutdown)
-        {
-            await ViewModel.CaptureScreenshotAsync(serial, file.Path);
-        }
+        InitializeWithWindow.Initialize(picker, ownerWindow);
+        return await picker.PickSaveFileAsync();
     }
 
     private async void ExportLogcat_Click(object sender, RoutedEventArgs e)
@@ -540,6 +582,61 @@ public sealed partial class MainPage : Page
         if (ViewModel is null || !e.DataView.Contains(StandardDataFormats.StorageItems)) return;
         var items = await e.DataView.GetStorageItemsAsync();
         ViewModel.SetTransferFiles(items.OfType<StorageFile>().Select(file => file.Path));
+    }
+
+    private void ScreenDrop_DragOver(object sender, DragEventArgs e)
+    {
+        if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
+        e.AcceptedOperation = DataPackageOperation.Copy;
+        e.DragUIOverride.Caption = "直接安装 APK 或发送文件到设备";
+        e.DragUIOverride.IsCaptionVisible = true;
+    }
+
+    private async void ScreenDrop_Drop(object sender, DragEventArgs e)
+    {
+        if (ViewModel is null || !e.DataView.Contains(StandardDataFormats.StorageItems)) return;
+        var items = await e.DataView.GetStorageItemsAsync();
+        var files = items.OfType<StorageFile>().Select(file => file.Path).ToList();
+        if (files.Count == 0) return;
+
+        var apks = files.Where(file => file.EndsWith(".apk", StringComparison.OrdinalIgnoreCase)).ToList();
+        var otherFiles = files.Where(file => !file.EndsWith(".apk", StringComparison.OrdinalIgnoreCase)).ToList();
+
+        if (otherFiles.Count > 0)
+        {
+            ViewModel.SetTransferFiles(otherFiles);
+        }
+
+        if (apks.Count > 0)
+        {
+            ViewModel.ApkFilePath = apks[0];
+            if (ViewModel.CanUseSelectedDevice)
+            {
+                await ViewModel.InstallApkAsync(ViewModel.SelectedDeviceSerial);
+                if (otherFiles.Count > 0)
+                {
+                    await ViewModel.PushFileAsync(ViewModel.SelectedDeviceSerial);
+                }
+            }
+            else
+            {
+                ViewModel.StatusText = otherFiles.Count > 0
+                    ? $"已就绪 APK 与 {otherFiles.Count} 个传输文件，请先选择目标设备"
+                    : "已就绪 APK，请先选择目标设备";
+            }
+        }
+        else
+        {
+            ViewModel.SetTransferFiles(otherFiles);
+            if (ViewModel.CanUseSelectedDevice)
+            {
+                await ViewModel.PushFileAsync(ViewModel.SelectedDeviceSerial);
+            }
+            else
+            {
+                ViewModel.StatusText = $"已添加 {otherFiles.Count} 个文件到传输队列，请选择目标设备";
+            }
+        }
     }
 
     private async void MirrorProfileSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -595,14 +692,16 @@ public sealed partial class MainPage : Page
         await ViewModel.SetAutoRefreshAsync(toggle.IsOn);
     }
 
-    private async void AutoRefreshTimer_Tick(object? sender, object e)
+    private void AutoRefreshTimer_Tick(object? sender, object e)
     {
-        if (!_shutdown && ViewModel is { AutoRefresh: true, IsBusy: false }) await ViewModel.RefreshAsync(silent: true);
+        if (!_shutdown && ViewModel is { AutoRefresh: true, IsBusy: false })
+            Guard(() => ViewModel.RefreshAsync(silent: true));
     }
 
-    private async void PerformanceTimer_Tick(object? sender, object e)
+    private void PerformanceTimer_Tick(object? sender, object e)
     {
-        if (!_shutdown && ViewModel is { PerformanceMonitoringEnabled: true }) await ViewModel.RefreshPerformanceAsync();
+        if (!_shutdown && ViewModel is { PerformanceMonitoringEnabled: true })
+            Guard(() => ViewModel.RefreshPerformanceAsync());
     }
 
     private async void PerformanceMonitoringToggle_Toggled(object sender, RoutedEventArgs e)
@@ -621,7 +720,7 @@ public sealed partial class MainPage : Page
         if (enabled)
         {
             _performanceTimer.Start();
-            _ = ViewModel!.RefreshPerformanceAsync();
+            Guard(() => ViewModel!.RefreshPerformanceAsync());
         }
         else
         {
@@ -756,4 +855,218 @@ public sealed partial class MainPage : Page
             };
         }
     }
+
+    private void QuickCommand_Click(object sender, RoutedEventArgs e) =>
+        ShowCommandPalette();
+
+    private void CommandPaletteAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        ToggleCommandPalette();
+        args.Handled = true;
+    }
+
+    private void MainPage_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        var ctrlDown = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control)
+            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+        if (ctrlDown && e.Key == VirtualKey.K)
+        {
+            ToggleCommandPalette();
+            e.Handled = true;
+        }
+        else if (e.Key == VirtualKey.Escape && CommandPaletteOverlay.Visibility == Visibility.Visible)
+        {
+            HideCommandPalette();
+            e.Handled = true;
+        }
+    }
+
+    private void ToggleCommandPalette()
+    {
+        if (CommandPaletteOverlay.Visibility == Visibility.Visible)
+            HideCommandPalette();
+        else
+            ShowCommandPalette();
+    }
+
+    private void ShowCommandPalette()
+    {
+        CommandPaletteOverlay.Visibility = Visibility.Visible;
+        CommandSearchBox.Text = string.Empty;
+        FilterCommands(string.Empty);
+        CommandSearchBox.Focus(FocusState.Programmatic);
+    }
+
+    private void HideCommandPalette()
+    {
+        CommandPaletteOverlay.Visibility = Visibility.Collapsed;
+    }
+
+    private void CommandPaletteOverlay_Tapped(object sender, TappedRoutedEventArgs e) =>
+        HideCommandPalette();
+
+    private void CommandPaletteCard_Tapped(object sender, TappedRoutedEventArgs e) =>
+        e.Handled = true;
+
+    private void CommandSearchBox_TextChanged(object sender, TextChangedEventArgs e) =>
+        FilterCommands(CommandSearchBox.Text);
+
+    private void CommandSearchBox_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key == VirtualKey.Escape)
+        {
+            HideCommandPalette();
+            e.Handled = true;
+        }
+        else if (e.Key == VirtualKey.Enter)
+        {
+            if (CommandListView.SelectedItem is CommandPaletteItem selected)
+            {
+                ExecuteCommand(selected);
+            }
+            else if (CommandListView.Items.Count > 0 && CommandListView.Items[0] is CommandPaletteItem first)
+            {
+                ExecuteCommand(first);
+            }
+            e.Handled = true;
+        }
+        else if (e.Key == VirtualKey.Down)
+        {
+            if (CommandListView.SelectedIndex < CommandListView.Items.Count - 1)
+            {
+                CommandListView.SelectedIndex++;
+                CommandListView.ScrollIntoView(CommandListView.SelectedItem);
+            }
+            else if (CommandListView.SelectedIndex < 0 && CommandListView.Items.Count > 0)
+            {
+                CommandListView.SelectedIndex = 0;
+                CommandListView.ScrollIntoView(CommandListView.SelectedItem);
+            }
+            e.Handled = true;
+        }
+        else if (e.Key == VirtualKey.Up)
+        {
+            if (CommandListView.SelectedIndex > 0)
+            {
+                CommandListView.SelectedIndex--;
+                CommandListView.ScrollIntoView(CommandListView.SelectedItem);
+            }
+            e.Handled = true;
+        }
+    }
+
+    private void CommandListView_ItemClick(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is CommandPaletteItem item)
+        {
+            ExecuteCommand(item);
+        }
+    }
+
+    private readonly List<CommandPaletteItem> _allCommands =
+    [
+        new() { Id = "screenshot", Title = "捕获屏幕截图", Subtitle = "截取当前设备屏幕并保存为图片文件", Glyph = "\uE722", Shortcut = "工具栏" },
+        new() { Id = "mirror", Title = "启动 / 停止屏幕镜像", Subtitle = "在独立窗口中控制当前设备画面", Glyph = "\uE7F4" },
+        new() { Id = "back", Title = "发送返回按键 (Back)", Subtitle = "模拟 Android 物理返回键 (KeyCode 4)", Glyph = "\uE72B", Shortcut = "伴随栏" },
+        new() { Id = "home", Title = "发送主屏按键 (Home)", Subtitle = "返回 Android 设备主屏幕 (KeyCode 3)", Glyph = "\uE80F", Shortcut = "伴随栏" },
+        new() { Id = "recents", Title = "发送多任务按键 (Recents)", Subtitle = "打开最近运行应用列表 (KeyCode 187)", Glyph = "\uE7C4", Shortcut = "伴随栏" },
+        new() { Id = "power", Title = "电源键 / 息屏唤醒", Subtitle = "熄灭或唤醒设备屏幕 (KeyCode 26)", Glyph = "\uE7E8", Shortcut = "伴随栏" },
+        new() { Id = "vol_up", Title = "增加音量 (Volume+)", Subtitle = "调高设备媒体音量 (KeyCode 24)", Glyph = "\uE767" },
+        new() { Id = "vol_down", Title = "减少音量 (Volume-)", Subtitle = "降低设备媒体音量 (KeyCode 25)", Glyph = "\uE74F" },
+        new() { Id = "refresh", Title = "刷新设备列表", Subtitle = "重新扫描 USB 与网络 ADB 连接", Glyph = "\uE72C" },
+        new() { Id = "export_logcat", Title = "导出 Logcat 日志", Subtitle = "抓取当前设备运行日志快照", Glyph = "\uE8A5" },
+        new() { Id = "tasks", Title = "打开任务中心", Subtitle = "查看后台传输队列与录屏会话", Glyph = "\uE9D9" },
+        new() { Id = "settings", Title = "打开设置与诊断", Subtitle = "系统健康检查、更新与外观配置", Glyph = "\uE713" },
+        new() { Id = "terminal", Title = "打开终端命令行", Subtitle = "向当前设备发送交互式 Shell 指令", Glyph = "\uE756" },
+        new() { Id = "files", Title = "打开文件管理", Subtitle = "在电脑与设备间互传文件", Glyph = "\uE8B7" },
+        new() { Id = "apps", Title = "打开应用管理", Subtitle = "安装 APK 或管理已安装应用", Glyph = "\uE74C" }
+    ];
+
+    private void FilterCommands(string query)
+    {
+        var trimmed = query.Trim();
+        var filtered = string.IsNullOrEmpty(trimmed)
+            ? _allCommands
+            : _allCommands.Where(cmd =>
+                cmd.Title.Contains(trimmed, StringComparison.OrdinalIgnoreCase) ||
+                cmd.Subtitle.Contains(trimmed, StringComparison.OrdinalIgnoreCase) ||
+                cmd.Id.Contains(trimmed, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        CommandListView.ItemsSource = filtered;
+        if (filtered.Count > 0)
+        {
+            CommandListView.SelectedIndex = 0;
+        }
+    }
+
+    private async void ExecuteCommand(CommandPaletteItem item)
+    {
+        HideCommandPalette();
+        switch (item.Id)
+        {
+            case "screenshot":
+                SaveScreenshot_Click(this, new RoutedEventArgs());
+                break;
+            case "mirror":
+                if (ViewModel is not null && !string.IsNullOrEmpty(ViewModel.SelectedDeviceSerial))
+                {
+                    MirrorAction_Click(MirrorActionButton, new RoutedEventArgs());
+                }
+                break;
+            case "back":
+                if (ViewModel is not null) await ViewModel.SendDeviceKeyAsync(4);
+                break;
+            case "home":
+                if (ViewModel is not null) await ViewModel.SendDeviceKeyAsync(3);
+                break;
+            case "recents":
+                if (ViewModel is not null) await ViewModel.SendDeviceKeyAsync(187);
+                break;
+            case "power":
+                if (ViewModel is not null) await ViewModel.SendDeviceKeyAsync(26);
+                break;
+            case "vol_up":
+                if (ViewModel is not null) await ViewModel.SendDeviceKeyAsync(24);
+                break;
+            case "vol_down":
+                if (ViewModel is not null) await ViewModel.SendDeviceKeyAsync(25);
+                break;
+            case "refresh":
+                Refresh_Click(this, new RoutedEventArgs());
+                break;
+            case "export_logcat":
+                ExportLogcat_Click(this, new RoutedEventArgs());
+                break;
+            case "tasks":
+                SelectSection("tasks");
+                TasksNavigationItem.Focus(FocusState.Programmatic);
+                break;
+            case "settings":
+                SelectSection("settings");
+                SettingsNavigationItem.Focus(FocusState.Programmatic);
+                break;
+            case "terminal":
+                SelectSection("terminal");
+                TerminalNavigationItem.Focus(FocusState.Programmatic);
+                break;
+            case "files":
+                SelectSection("files");
+                FilesNavigationItem.Focus(FocusState.Programmatic);
+                break;
+            case "apps":
+                SelectSection("apps");
+                AppsNavigationItem.Focus(FocusState.Programmatic);
+                break;
+        }
+    }
+}
+
+public sealed class CommandPaletteItem
+{
+    public required string Id { get; init; }
+    public required string Title { get; init; }
+    public required string Subtitle { get; init; }
+    public required string Glyph { get; init; }
+    public string? Shortcut { get; init; }
+    public bool HasShortcut => !string.IsNullOrEmpty(Shortcut);
 }

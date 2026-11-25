@@ -57,6 +57,56 @@ public sealed class GitHubUpdateServiceTests
         Assert.False((await service.CheckAsync()).IsUpdateAvailable);
     }
 
+    [Theory]
+    [InlineData("V2.0.0-2026.11.23", "V2.0.0-2026.11.24", true)]
+    [InlineData("V2.0.0-2026.11.23", "V2.0.0-2026.11.23", false)]
+    [InlineData("V2.0.0-2026.11.23", "V2.0.0-2026.11.22", false)]
+    [InlineData("V2.0.0-2026.11.23", "V2.0.1-2026.11.22", true)]
+    [InlineData("V2.0.1-2026.11.23", "V2.0.0-2026.11.24", false)]
+    [InlineData("V2.0.0", "V2.0.0-2026.11.24", true)]
+    [InlineData("V2.0.0-2026.11.23", "V2.0.0", false)]
+    [InlineData("V1.9.0-2026.11.23", "V2.0.0", true)]
+    public async Task CheckAsync_ComparesCoreVersionThenBuildDate(string current, string latest, bool isNewer)
+    {
+        using var client = ClientFor(latest);
+        var service = new GitHubUpdateService(client, current, "owner", "repo");
+
+        var update = await service.CheckAsync();
+
+        Assert.Equal(isNewer, update.IsUpdateAvailable);
+        Assert.Equal(current, update.CurrentVersion);
+        Assert.Equal(latest, update.LatestVersion);
+        Assert.Equal($"ADB-Mirror-Studio-Setup-{latest}-win-x64.exe", update.Installer?.FileName);
+    }
+
+    [Theory]
+    [InlineData("V2.0.0-2026.11.23", "V2.0.0-2026.02.29")]
+    [InlineData("V2.0.0-2026.11.23", "V2.0.0-2026.2.01")]
+    [InlineData("V2.0.0-2026.11.23", "V2.0-2026.11.24")]
+    [InlineData("V2.0.0-2026.11.23", "V2.0.0.0-2026.11.24")]
+    [InlineData("V2.0.0-invalid", "V2.0.0-2026.11.24")]
+    public async Task CheckAsync_RejectsInvalidFullVersion(string current, string latest)
+    {
+        using var client = ClientFor(latest);
+        var service = new GitHubUpdateService(client, current, "owner", "repo");
+
+        await Assert.ThrowsAsync<FormatException>(() => service.CheckAsync());
+    }
+
+    [Theory]
+    [InlineData("V2.0.0")]
+    [InlineData("V2.0.0-2026.11.22")]
+    public async Task CheckAsync_RejectsDatedReleaseInstallerWithMissingOrDifferentDate(string installerVersion)
+    {
+        using var client = ClientFor("V2.0.0-2026.11.24", installerTag: installerVersion);
+        var service = new GitHubUpdateService(client, "V2.0.0-2026.11.23", "owner", "repo");
+
+        var update = await service.CheckAsync();
+
+        Assert.True(update.IsUpdateAvailable);
+        Assert.Null(update.Installer);
+    }
+
     [Fact]
     public async Task CheckAsync_DoesNotOfferDirectInstallWithoutGitHubDigest()
     {
@@ -128,6 +178,40 @@ public sealed class GitHubUpdateServiceTests
                 service.DownloadInstallerAsync(update, directory));
 
             Assert.Empty(Directory.EnumerateFiles(directory));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DatedInstallerWithoutVersionMetadataIsRejectedDespiteMatchingHash()
+    {
+        var payload = Encoding.UTF8.GetBytes("payload without installer version metadata");
+        using var client = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(payload)
+        }));
+        const string latest = "V2.0.0-2026.11.24";
+        const string fileName = "ADB-Mirror-Studio-Setup-" + latest + "-win-x64.exe";
+        var service = new GitHubUpdateService(client, "V2.0.0-2026.11.23", "owner", "repo");
+        var package = new AppUpdatePackage(fileName, $"https://github.com/owner/repo/releases/download/{latest}/{fileName}",
+            payload.Length, Convert.ToHexString(SHA256.HashData(payload)));
+        var update = new AppUpdateInfo("V2.0.0-2026.11.23", latest, true, "https://example.test/release", package, null);
+        var directory = NewTemporaryDirectory();
+        try
+        {
+            var downloadError = await Assert.ThrowsAsync<InvalidDataException>(() => service.DownloadInstallerAsync(update, directory));
+            Assert.Contains(latest, downloadError.Message);
+            Assert.Empty(Directory.EnumerateFiles(directory));
+
+            var path = Path.Combine(directory, fileName);
+            await File.WriteAllBytesAsync(path, payload);
+            var cacheError = await Assert.ThrowsAsync<InvalidDataException>(() => service.DownloadInstallerAsync(update, directory));
+            Assert.Contains(latest, cacheError.Message);
+            var launchError = await Assert.ThrowsAsync<InvalidDataException>(() => service.AcquireVerifiedInstallerAsync(update, path));
+            Assert.Contains(latest, launchError.Message);
         }
         finally
         {

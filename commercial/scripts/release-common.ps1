@@ -1,4 +1,4 @@
-function Assert-ReleaseChildPath {
+﻿function Assert-ReleaseChildPath {
     param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$Path)
     $rootPath = [IO.Path]::GetFullPath($Root).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
     $childPath = [IO.Path]::GetFullPath($Path)
@@ -35,7 +35,7 @@ function Remove-ReleaseStagingDirectory {
 
 function Get-ReleaseVersion {
     param([Parameter(Mandatory)][string]$CommercialRoot)
-    [xml]$properties = Get-Content -LiteralPath (Join-Path $CommercialRoot 'Directory.Build.props') -Raw
+    [xml]$properties = Get-Content -LiteralPath (Join-Path $CommercialRoot 'Directory.Build.props') -Encoding UTF8 -Raw
     $version = [string]$properties.Project.PropertyGroup.Version
     if ($version -notmatch '^\d+\.\d+\.\d+$') { throw '发行版本必须使用 Major.Minor.Patch 格式。' }
     $fileVersion = "$version.0"
@@ -54,7 +54,7 @@ function Get-ReleaseVersion {
         @('src\AdbMirrorStudio.App\app.manifest', "/*[local-name()='assembly']/*[local-name()='assemblyIdentity']/@version"),
         @('src\AdbMirrorStudio.App\Package.appxmanifest', "/*[local-name()='Package']/*[local-name()='Identity']/@Version")
     )) {
-        [xml]$document = Get-Content -LiteralPath (Join-Path $CommercialRoot $manifest[0]) -Raw
+        [xml]$document = Get-Content -LiteralPath (Join-Path $CommercialRoot $manifest[0]) -Encoding UTF8 -Raw
         if ($document.SelectSingleNode($manifest[1]).Value -cne $fileVersion) {
             throw "版本清单与 Directory.Build.props 不一致：$($manifest[0])"
         }
@@ -78,40 +78,74 @@ function Get-RequiredReleaseFiles {
     )
 }
 
+function Assert-ReleaseProductVersion {
+    param(
+        [Parameter(Mandatory)][AllowEmptyString()][string]$ProductVersion,
+        [Parameter(Mandatory)][string]$ExpectedFileVersion,
+        [string]$ExpectedBuildDate
+    )
+    $prefix = "V$(([version]$ExpectedFileVersion).ToString(3))-"
+    if (-not $ProductVersion.StartsWith($prefix, [StringComparison]::Ordinal)) {
+        throw "发行负载的完整版本必须为 ${prefix}yyyy.MM.dd，请重新构建便携包。"
+    }
+    $buildDate = $ProductVersion.Substring($prefix.Length)
+    $parsedDate = [datetime]::MinValue
+    if (-not [datetime]::TryParseExact($buildDate, 'yyyy.MM.dd', [Globalization.CultureInfo]::InvariantCulture,
+            [Globalization.DateTimeStyles]::None, [ref]$parsedDate)) {
+        throw '发行负载的构建日期无效，必须为有效的 yyyy.MM.dd 日期。'
+    }
+    if ($ExpectedBuildDate -and $buildDate -cne $ExpectedBuildDate) {
+        throw "发行负载的构建日期应为 $ExpectedBuildDate，实际为 $buildDate。"
+    }
+}
+
 function Assert-ReleasePayload {
-    param([Parameter(Mandatory)][string]$PayloadDirectory, [Parameter(Mandatory)][string]$ExpectedFileVersion)
+    param(
+        [Parameter(Mandatory)][string]$PayloadDirectory,
+        [Parameter(Mandatory)][string]$ExpectedFileVersion,
+        [string]$ExpectedBuildDate,
+        [switch]$PassThru
+    )
     foreach ($relativePath in Get-RequiredReleaseFiles) {
         $fullPath = Join-Path $PayloadDirectory $relativePath
         if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf) -or (Get-Item -LiteralPath $fullPath).Length -eq 0) {
             throw "发行负载缺少必要文件或文件为空：$relativePath"
         }
     }
+    $normalizedBase = $PayloadDirectory.TrimEnd('\', '/') + '\'
     foreach ($item in Get-ChildItem -LiteralPath $PayloadDirectory -Recurse -Force) {
         if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
             throw '发行负载不能包含符号链接或目录联接。'
         }
         if (-not $item.PSIsContainer -and ($item.Name -match '(?i)^(settings|credentials|secrets)\.json$|^\.env($|\.)' -or
             $item.Extension -match '(?i)^\.(pdb|dbg|dmp|log|etl|pfx|p12|pem|key|snk|jks|keystore)$')) {
-            throw "发行负载包含禁止文件：$([IO.Path]::GetRelativePath($PayloadDirectory, $item.FullName))"
+            $rel = if ($item.FullName.StartsWith($normalizedBase, [System.StringComparison]::OrdinalIgnoreCase)) { $item.FullName.Substring($normalizedBase.Length) } else { $item.Name }
+            throw "发行负载包含禁止文件：$rel"
         }
     }
-    $actualVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $PayloadDirectory 'AdbMirrorStudio.App.dll')).FileVersion
-    if ($actualVersion -ne $ExpectedFileVersion) {
+    $actualVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $PayloadDirectory 'AdbMirrorStudio.App.dll'))
+    if ($actualVersion.FileVersion -ne $ExpectedFileVersion) {
         throw '发行负载版本与当前发布版本不一致，请重新构建便携包。'
     }
+    Assert-ReleaseProductVersion -ProductVersion $actualVersion.ProductVersion -ExpectedFileVersion $ExpectedFileVersion `
+        -ExpectedBuildDate $ExpectedBuildDate
+    if ($PassThru) { $actualVersion.ProductVersion }
 }
 
 function Write-UninstallPayloadInclude {
     param([Parameter(Mandatory)][string]$PayloadDirectory, [Parameter(Mandatory)][string]$OutputPath)
+    $normalizedBase = $PayloadDirectory.TrimEnd('\', '/') + '\'
     $lines = [Collections.Generic.List[string]]::new()
     $lines.Add('!macro RemoveInstalledPayload')
     foreach ($file in Get-ChildItem -LiteralPath $PayloadDirectory -Recurse -File -Force | Sort-Object FullName) {
-        $relativePath = [IO.Path]::GetRelativePath($PayloadDirectory, $file.FullName).Replace('$', '$$')
+        $rel = if ($file.FullName.StartsWith($normalizedBase, [System.StringComparison]::OrdinalIgnoreCase)) { $file.FullName.Substring($normalizedBase.Length) } else { $file.Name }
+        $relativePath = $rel.Replace('$', '$$')
         $lines.Add('  Delete "$INSTDIR\' + $relativePath + '"')
     }
     $lines.Add('  Delete "$INSTDIR\Uninstall.exe"')
     foreach ($directory in Get-ChildItem -LiteralPath $PayloadDirectory -Recurse -Directory -Force | Sort-Object { $_.FullName.Length } -Descending) {
-        $relativePath = [IO.Path]::GetRelativePath($PayloadDirectory, $directory.FullName).Replace('$', '$$')
+        $rel = if ($directory.FullName.StartsWith($normalizedBase, [System.StringComparison]::OrdinalIgnoreCase)) { $directory.FullName.Substring($normalizedBase.Length) } else { $directory.Name }
+        $relativePath = $rel.Replace('$', '$$')
         $lines.Add('  RMDir "$INSTDIR\' + $relativePath + '"')
     }
     $lines.Add('  RMDir "$INSTDIR"')

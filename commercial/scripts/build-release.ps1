@@ -1,9 +1,10 @@
-param(
+﻿param(
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Release'
 )
 
 $ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.IO.Compression.FileSystem
 . (Join-Path $PSScriptRoot 'release-common.ps1')
 $commercialRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $workspaceRoot = (Resolve-Path (Join-Path $commercialRoot '..')).Path
@@ -15,7 +16,7 @@ $privacyAudit = Join-Path $commercialRoot 'scripts\test-privacy.ps1'
 $artifactRoot = Join-Path $commercialRoot 'artifacts\release'
 $releaseVersion = Get-ReleaseVersion -CommercialRoot $commercialRoot
 $productVersion = "V$($releaseVersion.Version)"
-$archivePath = Join-Path $artifactRoot "AdbMirrorStudio-$productVersion-win-x64.zip"
+$buildDate = [datetime]::Now.ToString('yyyy.MM.dd', [Globalization.CultureInfo]::InvariantCulture)
 $stagingDirectory = Join-Path $artifactRoot ".staging-$([Guid]::NewGuid().ToString('N'))"
 $publishDirectory = Join-Path $stagingDirectory 'win-x64'
 
@@ -34,6 +35,7 @@ try {
         --self-contained true `
         --output $publishDirectory `
         /p:Unpackaged=true `
+        "/p:PackageBuildDate=$buildDate" `
         /p:PublishSingleFile=false `
         /p:PublishTrimmed=false `
         /p:DebugType=None `
@@ -82,15 +84,19 @@ try {
         throw "发布目录包含本机用户路径：$($localPathFiles -join ', ')"
     }
 
-    Assert-ReleasePayload -PayloadDirectory $publishDirectory -ExpectedFileVersion $releaseVersion.FileVersion
+    $displayVersion = Assert-ReleasePayload -PayloadDirectory $publishDirectory -ExpectedFileVersion $releaseVersion.FileVersion `
+        -ExpectedBuildDate $buildDate -PassThru
+    $archivePath = Join-Path $artifactRoot "AdbMirrorStudio-$displayVersion-win-x64.zip"
     $stagedArchive = Join-Path $stagingDirectory 'portable.zip'
     [IO.Compression.ZipFile]::CreateFromDirectory($publishDirectory, $stagedArchive, [IO.Compression.CompressionLevel]::Optimal, $false)
     # Retain the last working archive if publication or compression fails.
-    [IO.File]::Move($stagedArchive, $archivePath, $true)
+    if (Test-Path -LiteralPath $archivePath) { Remove-Item -LiteralPath $archivePath -Force }
+    [IO.File]::Move($stagedArchive, $archivePath)
 
     $hash = Get-FileHash -LiteralPath $archivePath -Algorithm SHA256
     [pscustomobject]@{
         Version = $productVersion
+        DisplayVersion = $displayVersion
         Archive = $archivePath
         Sha256 = $hash.Hash
         SizeBytes = (Get-Item -LiteralPath $archivePath).Length

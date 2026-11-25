@@ -137,6 +137,65 @@ public sealed partial class MainViewModelBehaviorTests
         Assert.Equal("暂不可用", model.CpuUsageText);
     }
 
+    [Fact]
+    public async Task WorkspacePresentation_DeviceStatusWarning_FlagsUnauthorizedAndOfflineTargets()
+    {
+        var unauthorizedDevice = new DeviceInfo("unauth", "ModelU", "ProductU", DeviceState.Unauthorized, ConnectionKind.Usb, DateTimeOffset.UtcNow);
+        var offlineDevice = new DeviceInfo("offline", "ModelO", "ProductO", DeviceState.Offline, ConnectionKind.TcpIp, DateTimeOffset.UtcNow);
+        var onlineDevice = new DeviceInfo("online", "ModelL", "ProductL", DeviceState.Online, ConnectionKind.Usb, DateTimeOffset.UtcNow);
+
+        using var model = Create(new FakeAdb { Devices = [unauthorizedDevice, offlineDevice, onlineDevice] });
+        await model.RefreshAsync();
+
+        model.SelectedDeviceSerial = "unauth";
+        Assert.True(model.HasSelectedDeviceWarning);
+        Assert.Equal("设备未授权", model.SelectedDeviceWarningTitle);
+        Assert.Contains("允许 USB 调试", model.SelectedDeviceWarningMessage);
+        Assert.Equal(Microsoft.UI.Xaml.Controls.InfoBarSeverity.Warning, model.SelectedDeviceWarningSeverity);
+
+        model.SelectedDeviceSerial = "offline";
+        Assert.True(model.HasSelectedDeviceWarning);
+        Assert.Equal("设备已离线", model.SelectedDeviceWarningTitle);
+        Assert.Contains("检查 USB 数据线或无线网络连接", model.SelectedDeviceWarningMessage);
+        Assert.Equal(Microsoft.UI.Xaml.Controls.InfoBarSeverity.Error, model.SelectedDeviceWarningSeverity);
+
+        model.SelectedDeviceSerial = "online";
+        Assert.False(model.HasSelectedDeviceWarning);
+        Assert.Equal(string.Empty, model.SelectedDeviceWarningTitle);
+
+        model.SelectedDeviceSerial = null;
+        Assert.False(model.HasSelectedDeviceWarning);
+    }
+
+    [Fact]
+    public async Task WorkspacePresentation_ActiveTaskCount_TracksMirrorSessionsAndTransfers()
+    {
+        var session = new MirrorSession("s1", "dev1", MirrorSessionState.Running, 101, DateTimeOffset.UtcNow);
+        var mirror = new FakeMirror { ActiveSessions = [session] };
+        using var model = Create(new FakeAdb { Devices = [Device("dev1")] }, mirror);
+
+        Assert.False(model.HasActiveTasks);
+        Assert.Equal(0, model.ActiveTaskCount);
+
+        await model.RefreshAsync();
+
+        Assert.True(model.HasActiveTasks);
+        Assert.Equal(1, model.ActiveTaskCount);
+        Assert.Equal("1", model.ActiveTaskCountLabel);
+    }
+
+    [Fact]
+    public void DiagnosticItemViewModel_SeverityBrush_MatchesSeverityLevel()
+    {
+        var success = new DiagnosticItemViewModel(new AdbMirrorStudio.Application.Diagnostics.DiagnosticItem("adb", "Adb", "OK", AdbMirrorStudio.Application.Diagnostics.DiagnosticSeverity.Success));
+        var warning = new DiagnosticItemViewModel(new AdbMirrorStudio.Application.Diagnostics.DiagnosticItem("conflict", "Conflict", "Port taken", AdbMirrorStudio.Application.Diagnostics.DiagnosticSeverity.Warning));
+        var error = new DiagnosticItemViewModel(new AdbMirrorStudio.Application.Diagnostics.DiagnosticItem("scrcpy", "Scrcpy", "Missing", AdbMirrorStudio.Application.Diagnostics.DiagnosticSeverity.Error));
+
+        Assert.Equal(Microsoft.UI.ColorHelper.FromArgb(255, 48, 200, 117), ((Microsoft.UI.Xaml.Media.SolidColorBrush)success.SeverityBrush).Color);
+        Assert.Equal(Microsoft.UI.ColorHelper.FromArgb(255, 234, 163, 0), ((Microsoft.UI.Xaml.Media.SolidColorBrush)warning.SeverityBrush).Color);
+        Assert.Equal(Microsoft.UI.ColorHelper.FromArgb(255, 232, 93, 93), ((Microsoft.UI.Xaml.Media.SolidColorBrush)error.SeverityBrush).Color);
+    }
+
     private static void AssertMirrorPresentation(MainViewModel model, bool mirroring, string action, string status, string headline)
     {
         Assert.Equal(mirroring, model.SelectedDeviceIsMirroring);
