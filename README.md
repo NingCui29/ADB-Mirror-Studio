@@ -8,13 +8,13 @@
 
 ## 下载
 
-当前发行版 `V2.0.0-2026.11.25`。
+当前发行版 `V2.0.1-2026.11.25`。
 
-- [GitHub Release 和 SHA256](https://github.com/NingCui29/ADB-Mirror-Studio/releases/tag/V2.0.0-2026.11.25)
-- [下载安装版（推荐）](https://github.com/NingCui29/ADB-Mirror-Studio/releases/download/V2.0.0-2026.11.25/ADB-Mirror-Studio-Setup-V2.0.0-2026.11.25-win-x64.exe)
-- [下载便携版](https://github.com/NingCui29/ADB-Mirror-Studio/releases/download/V2.0.0-2026.11.25/AdbMirrorStudio-V2.0.0-2026.11.25-win-x64.zip)
+- [GitHub Release 和 SHA256](https://github.com/NingCui29/ADB-Mirror-Studio/releases/tag/V2.0.1-2026.11.25)
+- [下载安装版（推荐）](https://github.com/NingCui29/ADB-Mirror-Studio/releases/download/V2.0.1-2026.11.25/ADB-Mirror-Studio-Setup-V2.0.1-2026.11.25-win-x64.exe)
+- [下载便携版](https://github.com/NingCui29/ADB-Mirror-Studio/releases/download/V2.0.1-2026.11.25/AdbMirrorStudio-V2.0.1-2026.11.25-win-x64.zip)
 
-从早期 `V2.0.0` 升级时，请下载新版安装包并覆盖安装。支持完整版本号的客户端可以在应用内识别同一基础版本的更新日期。
+`V2.0.0` 用户可在应用内检查 `V2.0.1` 更新，或下载新版安装包覆盖安装。支持完整版本号的客户端还可以识别同一基础版本的更新日期。
 
 ## 主要功能
 
@@ -63,7 +63,7 @@
 
 ### 安装版
 
-1. 下载 `ADB-Mirror-Studio-Setup-V2.0.0-2026.11.25-win-x64.exe`。
+1. 下载 `ADB-Mirror-Studio-Setup-V2.0.1-2026.11.25-win-x64.exe`。
 2. 核对上方 SHA256 后运行安装程序。
 3. 从开始菜单打开 ADB Mirror Studio。
 
@@ -71,7 +71,7 @@
 
 ### 便携版
 
-1. 下载 `AdbMirrorStudio-V2.0.0-2026.11.25-win-x64.zip`。
+1. 下载 `AdbMirrorStudio-V2.0.1-2026.11.25-win-x64.zip`。
 2. 完整解压 ZIP，不要直接在压缩包中运行。
 3. 双击 `AdbMirrorStudio.App.exe`。
 
@@ -160,7 +160,7 @@
 
 ## 文档
 
-- [V2.0.0-2026.11.25 发行说明](commercial/RELEASE-NOTES-V2.0.0-2026.11.25.md)
+- [V2.0.1-2026.11.25 发行说明](commercial/RELEASE-NOTES-V2.0.1-2026.11.25.md)
 - [V2.0.0 发行说明](commercial/RELEASE-NOTES-V2.0.0.md)
 - [V2.0.0 发布验收](commercial/DEVICE-QA-V2.0.0.md)
 - [完整使用、开发和发布手册](commercial/README.md)

@@ -1,4 +1,4 @@
-# ADB Mirror Studio V2.0.0-2026.11.25
+# ADB Mirror Studio V2.0.1-2026.11.25
 
 ## 主要改动
 
@@ -10,6 +10,6 @@
 
 ## 安装与升级
 
-- 安装版和便携版均支持 Windows x64。下载文件及 SHA256 见 [GitHub Release](https://github.com/NingCui29/ADB-Mirror-Studio/releases/tag/V2.0.0-2026.11.25)。
-- 早期 `V2.0.0` 客户端需要从发行页下载新版安装包并覆盖安装。此版本起，客户端可识别同一基础版本下日期较新的发行版。
+- 安装版和便携版均支持 Windows x64。下载文件及 SHA256 见 [GitHub Release](https://github.com/NingCui29/ADB-Mirror-Studio/releases/tag/V2.0.1-2026.11.25)。
+- `V2.0.0` 用户可以在应用内检查 `V2.0.1` 更新，或从发行页下载新版安装包覆盖安装。此版本起，客户端还可识别同一基础版本下日期较新的发行版。
 - 安装器尚未配置 Authenticode 签名，请从本仓库的发行页下载并核对 SHA256。

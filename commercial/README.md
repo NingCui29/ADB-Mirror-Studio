@@ -2,7 +2,7 @@
 
 ADB Mirror Studio 是面向 Windows 的 Android 设备连接、屏幕镜像、录屏、文件传输和环境诊断工作台。界面采用 WinUI 3，按 Material Design 色彩角色组织天空蓝主题与不透明分层底色。ADB、scrcpy 和应用运行时均可随便携包分发。所有功能永久免费，无账户、无试用、无订阅、无激活和功能分级。
 
-> 当前发行版为 `V2.0.0-2026.11.25`。界面版本号包含实际打包日期。个人、组织和企业均可在合法授权的设备上免费使用全部功能。
+> 当前发行版为 `V2.0.1-2026.11.25`。界面版本号包含实际打包日期。个人、组织和企业均可在合法授权的设备上免费使用全部功能。
 
 ## 系统要求
 
@@ -344,7 +344,7 @@ commercial/
 
 ```text
 commercial\artifacts\release\
-  AdbMirrorStudio-V2.0.0-yyyy.MM.dd-win-x64.zip
+  AdbMirrorStudio-V2.0.1-yyyy.MM.dd-win-x64.zip
 ```
 
 生成安装版：
@@ -359,7 +359,7 @@ commercial\artifacts\release\
 
 ```text
 commercial\artifacts\installer\
-  ADB-Mirror-Studio-Setup-V2.0.0-yyyy.MM.dd-win-x64.exe
+  ADB-Mirror-Studio-Setup-V2.0.1-yyyy.MM.dd-win-x64.exe
 ```
 
 ## 第三方组件
