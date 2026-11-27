@@ -6,7 +6,6 @@ namespace AdbMirrorStudio.Infrastructure.Processes;
 
 public sealed class ProcessCommandRunner : ICommandRunner
 {
-    private const int MaxCapturedCharacters = 1_000_000;
     private static readonly TimeSpan MaxPipeDrainGrace = TimeSpan.FromSeconds(2);
 
     public async Task<CommandResult> RunAsync(
@@ -117,8 +116,8 @@ public sealed class ProcessCommandRunner : ICommandRunner
             }
         }
 
-        string stdout;
-        string stderr;
+        CapturedOutput stdout;
+        CapturedOutput stderr;
         try
         {
             stdout = await stdoutTask.ConfigureAwait(false);
@@ -134,28 +133,40 @@ public sealed class ProcessCommandRunner : ICommandRunner
 
         return new CommandResult(
             process.HasExited ? process.ExitCode : -1,
-            stdout,
-            stderr,
+            stdout.Text,
+            stderr.Text,
             stopwatch.Elapsed,
             timedOut,
-            cancelled);
+            cancelled)
+        {
+            StandardOutputTruncation = stdout.Truncation,
+            StandardErrorTruncation = stderr.Truncation
+        };
     }
 
-    private static async Task<string> ReadCappedAsync(StreamReader reader, CancellationToken cancellationToken)
+    private readonly record struct CapturedOutput(string Text, OutputTruncation Truncation);
+
+    private static async Task<CapturedOutput> ReadCappedAsync(StreamReader reader, CancellationToken cancellationToken)
     {
         var buffer = new char[4096];
         var result = new StringBuilder();
 
-        var truncated = false;
+        var exceededLimit = false;
+        var interrupted = false;
         try
         {
             while (true)
             {
                 var count = await reader.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false);
-                if (count == 0) break;
+                if (count == 0)
+                {
+                    // Closing a held pipe can return EOF instead of throwing.
+                    interrupted = cancellationToken.IsCancellationRequested;
+                    break;
+                }
 
-                var remaining = MaxCapturedCharacters - result.Length;
-                truncated |= count > remaining;
+                var remaining = CommandResult.CaptureCharacterLimit - result.Length;
+                exceededLimit |= count > remaining;
                 if (remaining > 0)
                 {
                     result.Append(buffer, 0, Math.Min(count, remaining));
@@ -165,21 +176,23 @@ public sealed class ProcessCommandRunner : ICommandRunner
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // Return output already received when the drain is cancelled or bounded.
-            truncated = true;
+            interrupted = true;
         }
         catch (Exception exception) when (exception is IOException or ObjectDisposedException)
         {
             // The read end was closed while a read was pending, for example after
             // the process tree was killed. Keep whatever was already captured.
-            truncated = true;
+            interrupted = true;
         }
 
-        if (truncated)
+        if (exceededLimit || interrupted)
         {
             result.AppendLine().Append("[输出已截断]");
         }
 
-        return result.ToString();
+        var truncation = exceededLimit ? OutputTruncation.CharacterLimit
+            : interrupted ? OutputTruncation.Interrupted : OutputTruncation.None;
+        return new CapturedOutput(result.ToString(), truncation);
     }
 
     private static void TryCloseReader(StreamReader reader)

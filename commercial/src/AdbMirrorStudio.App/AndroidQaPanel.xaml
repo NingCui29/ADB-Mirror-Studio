@@ -1,0 +1,62 @@
+<UserControl
+    x:Class="AdbMirrorStudio.App.AndroidQaPanel"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Expander Header="界面测试" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+        <StackPanel Spacing="14">
+            <StackPanel Spacing="6">
+                <TextBlock Text="当前界面" Style="{StaticResource MaterialSectionTitleStyle}" />
+                <Button x:Name="InspectButton" Content="读取控件树" Click="Inspect_Click"
+                        Style="{StaticResource MaterialOutlinedButtonStyle}" />
+                <TextBox x:Name="NodeFilter" PlaceholderText="查找文本、资源 ID、描述或控件类型"
+                         AutomationProperties.Name="查找控件" TextChanged="Filter_Changed" />
+                <ListView x:Name="NodeList" MaxHeight="180" AutomationProperties.Name="控件树节点"
+                          SelectionMode="Single" SelectionChanged="Node_Changed" />
+                <TextBlock x:Name="NodeDetails" TextWrapping="Wrap" IsTextSelectionEnabled="True"
+                           Foreground="{ThemeResource SkyOnSurfaceVariantBrush}" />
+            </StackPanel>
+            <ContentControl x:Name="Editor" HorizontalContentAlignment="Stretch">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="测试步骤" Style="{StaticResource MaterialSectionTitleStyle}" />
+                    <ComboBox x:Name="ActionBox" Header="操作" HorizontalAlignment="Stretch"
+                              SelectionChanged="Action_Changed">
+                        <ComboBoxItem Tag="Tap" Content="点击控件" />
+                        <ComboBoxItem Tag="AssertVisible" Content="断言控件可见" />
+                        <ComboBoxItem Tag="Launch" Content="启动应用" />
+                        <ComboBoxItem Tag="InputText" Content="输入文本" />
+                        <ComboBoxItem Tag="Back" Content="返回" />
+                        <ComboBoxItem Tag="SwipeUp" Content="向上滑动" />
+                        <ComboBoxItem Tag="SwipeDown" Content="向下滑动" />
+                        <ComboBoxItem Tag="Screenshot" Content="保存截图" />
+                        <ComboBoxItem Tag="Logcat" Content="保存 Logcat" />
+                    </ComboBox>
+                    <TextBox x:Name="ValueBox" TextChanged="Value_Changed" />
+                    <TextBlock x:Name="ValueErrorText" Visibility="Collapsed" TextWrapping="Wrap"
+                               Foreground="{ThemeResource SystemFillColorCriticalBrush}" AutomationProperties.LiveSetting="Polite" />
+                    <CheckBox x:Name="ScrollRetry" Content="找不到控件时滚动一次，再查找" IsChecked="True" />
+                    <Button x:Name="AddButton" Content="添加步骤" Click="Add_Click"
+                            Style="{StaticResource MaterialOutlinedButtonStyle}" />
+                    <ListView x:Name="PlanList" MaxHeight="200" AutomationProperties.Name="已编排步骤"
+                              SelectionMode="Single" SelectionChanged="Plan_Changed" />
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Button x:Name="MoveUp" Content="上移" Click="MoveUp_Click" />
+                        <Button x:Name="MoveDown" Content="下移" Click="MoveDown_Click" />
+                        <Button x:Name="Remove" Content="移除" Click="Remove_Click" />
+                    </StackPanel>
+                    <TextBox x:Name="OutputFolder" Header="结果目录" PlaceholderText="选择保存测试结果的文件夹"
+                             IsReadOnly="True" />
+                    <Button Content="选择结果目录" Click="ChooseFolder_Click" Style="{StaticResource MaterialOutlinedButtonStyle}" />
+                </StackPanel>
+            </ContentControl>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button x:Name="RunButton" Content="运行步骤" Click="Run_Click"
+                        Style="{StaticResource MaterialFilledButtonStyle}" />
+                <Button x:Name="CancelButton" Content="取消运行" Click="Cancel_Click" />
+            </StackPanel>
+            <TextBlock x:Name="PanelError" Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                       TextWrapping="Wrap" IsTextSelectionEnabled="True" Visibility="Collapsed" />
+            <TextBlock Text="{Binding UiTestStatus}" TextWrapping="Wrap" IsTextSelectionEnabled="True"
+                       AutomationProperties.LiveSetting="Polite" />
+        </StackPanel>
+    </Expander>
+</UserControl>

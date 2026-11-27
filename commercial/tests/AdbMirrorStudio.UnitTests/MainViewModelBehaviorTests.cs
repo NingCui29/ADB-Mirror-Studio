@@ -704,6 +704,21 @@ public sealed partial class MainViewModelBehaviorTests
 
     private sealed class FakeAdb : IAdbService
     {
+        public Func<string, CancellationToken, Task<IReadOnlyList<UiTestNode>>>? InspectUi { get; init; }
+        public Func<UiTestStep, CancellationToken, Task>? ExecuteUi { get; init; }
+        public Func<string, Task<string>>? Screenshot { get; init; }
+        public Func<string, int, Task<string>>? Logcat { get; init; }
+        public List<(string Serial, UiTestAction Action)> UiActions { get; } = [];
+
+        public Task<IReadOnlyList<UiTestNode>> InspectUiAsync(string serial, CancellationToken cancellationToken = default)
+            => InspectUi?.Invoke(serial, cancellationToken) ?? throw new NotSupportedException();
+
+        public Task ExecuteUiStepAsync(string serial, UiTestStep step, CancellationToken cancellationToken = default)
+        {
+            UiActions.Add((serial, step.Action));
+            return ExecuteUi?.Invoke(step, cancellationToken) ?? Task.CompletedTask;
+        }
+
         public IReadOnlyList<DeviceInfo> Devices { get; set; } = [];
         public Func<CancellationToken, Task<IReadOnlyList<DeviceInfo>>>? GetDevices { get; init; }
         public Func<CancellationToken, Task<IReadOnlyList<InstalledApp>>>? GetApps { get; init; }
@@ -711,6 +726,8 @@ public sealed partial class MainViewModelBehaviorTests
         public Func<CancellationToken, Task<string>>? Connect { get; init; }
         public Func<CancellationToken, Task<DeviceDetails>>? Details { get; init; }
         public Func<string, CancellationToken, Task<DevicePerformanceCounters>>? Performance { get; init; }
+        public Func<string, CancellationToken, Task<string>>? Install { get; init; }
+        public List<(string Serial, string Action, string Path)> FileOperations { get; } = [];
         public Func<CancellationToken, Task<string>>? Push { get; set; }
         public List<(string, string)> Uninstalls { get; } = [];
         public List<(string, string)> ShellCommands { get; } = [];
@@ -725,9 +742,17 @@ public sealed partial class MainViewModelBehaviorTests
         public Task RebootAsync(string serial, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<string> EnableTcpIpAsync(string serial, int port = 5555, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<string> InstallApkAsync(string serial, string apkPath, CancellationToken cancellationToken = default)
-        { Installs.Add(apkPath); return Task.FromResult("Success"); }
+        {
+            Installs.Add(apkPath);
+            FileOperations.Add((serial, "install", apkPath));
+            return Install?.Invoke(apkPath, cancellationToken) ?? Task.FromResult("Success");
+        }
         public Task<string> PushFileAsync(string serial, string localPath, string remoteDirectory = "/sdcard/Download/", CancellationToken cancellationToken = default)
-        { Pushes.Add(localPath); return Push?.Invoke(cancellationToken) ?? Task.FromResult("Success"); }
+        {
+            Pushes.Add(localPath);
+            FileOperations.Add((serial, "push", localPath));
+            return Push?.Invoke(cancellationToken) ?? Task.FromResult("Success");
+        }
         public Task<bool> IsOnlineAsync(string serial, CancellationToken cancellationToken = default) => Task.FromResult(true);
         public Task<DeviceDetails> GetDeviceDetailsAsync(string serial, CancellationToken cancellationToken = default) => Details?.Invoke(cancellationToken) ?? throw new NotSupportedException();
         public Task<DevicePerformanceCounters> GetPerformanceCountersAsync(string serial, CancellationToken cancellationToken = default)
@@ -747,9 +772,9 @@ public sealed partial class MainViewModelBehaviorTests
         public Task<string> CaptureScreenshotAsync(string serial, string localPath, CancellationToken cancellationToken = default)
         {
             Screenshots.Add((serial, localPath));
-            return Task.FromResult(localPath);
+            return Screenshot?.Invoke(localPath) ?? Task.FromResult(localPath);
         }
-        public Task<string> GetLogcatSnapshotAsync(string serial, int maxLines = 500, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<string> GetLogcatSnapshotAsync(string serial, int maxLines = 500, CancellationToken cancellationToken = default) => Logcat?.Invoke(serial, maxLines) ?? throw new NotSupportedException();
         public Task<string> PullFileAsync(string serial, string remotePath, string localDirectory, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<InstalledApp>> GetInstalledAppsAsync(string serial, bool includeSystemApps = false, CancellationToken cancellationToken = default) => GetApps?.Invoke(cancellationToken) ?? Task.FromResult<IReadOnlyList<InstalledApp>>([new("loaded.app")]);
         public Task UninstallAppAsync(string serial, string packageName, CancellationToken cancellationToken = default)

@@ -547,7 +547,7 @@
                   <ColumnDefinition x:Name="ScreenFooterActionColumn" Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="镜像窗口支持键盘与鼠标控制" FontSize="12" Foreground="{ThemeResource SkyOnSurfaceVariantBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
-                <Button x:Name="ScreenFooterActions" Content="查看会话与录屏文件 ↗" Click="OpenTasks_Click" Grid.Column="1" Style="{StaticResource MaterialTextButtonStyle}" />
+                <Button x:Name="ScreenFooterActions" Content="查看任务与拖放记录 ↗" Click="OpenTasks_Click" Grid.Column="1" Style="{StaticResource MaterialTextButtonStyle}" />
               </Grid>
               <Expander x:Name="QuickLogcatExpander" Header="设备快速日志与排障" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                 <StackPanel Spacing="10" Padding="12,10">
@@ -619,55 +619,58 @@
             </Grid>
           </ScrollViewer>
           <ScrollViewer Grid.Row="1" x:Name="AppsScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch" HorizontalAlignment="Stretch" Visibility="Collapsed" Padding="0,0,0,24">
-            <Grid x:Name="AppsCards" Margin="0" ColumnSpacing="0" RowSpacing="14" MaxWidth="1400" HorizontalAlignment="Stretch">
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition x:Name="AppsSecondaryColumn" Width="0" />
-              </Grid.ColumnDefinitions>
-              <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition x:Name="AppsSecondaryRow" Height="Auto" />
-              </Grid.RowDefinitions>
-              <Border Grid.Row="0" Style="{StaticResource SurfaceCardStyle}" VerticalAlignment="Top">
-                <StackPanel Spacing="12">
-                  <TextBlock Text="安装 APK" Style="{StaticResource SectionTitleStyle}" TextWrapping="Wrap" />
-                  <Grid ColumnSpacing="8">
-                    <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="*" />
-                      <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBox Text="{Binding ApkFilePath, Mode=TwoWay}" IsReadOnly="True" PlaceholderText="选择 .apk 文件" />
-                    <Button Grid.Column="1" Content="选择 APK" Click="ChooseApk_Click" Style="{StaticResource MaterialOutlinedButtonStyle}" />
-                  </Grid>
-                  <Button Content="安装到当前设备" Click="InstallApk_Click" Style="{StaticResource MaterialFilledButtonStyle}" IsEnabled="{Binding CanInstallApk}" HorizontalAlignment="Left" />
-                </StackPanel>
-              </Border>
-              <Border x:Name="AppsManageCard" Grid.Row="1" Style="{StaticResource SurfaceCardStyle}" VerticalAlignment="Top">
-                <StackPanel Spacing="12">
-                  <TextBlock Text="管理应用" Style="{StaticResource SectionTitleStyle}" TextWrapping="Wrap" />
-                  <TextBlock Text="读取用户应用后选择目标包名。卸载前会再次确认。" Style="{StaticResource MaterialBodyStyle}" TextWrapping="Wrap" />
-                  <Grid ColumnSpacing="8">
-                    <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="*" />
-                      <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <ComboBox ItemsSource="{Binding InstalledApps}" DisplayMemberPath="PackageName" SelectedValuePath="PackageName" SelectedValue="{Binding SelectedAppPackage, Mode=TwoWay}" PlaceholderText="读取设备应用后选择包名" />
-                    <Button Grid.Column="1" Content="读取用户应用" Click="RefreshApps_Click" IsEnabled="{Binding CanUseSelectedDevice}" Style="{StaticResource MaterialOutlinedButtonStyle}" />
-                  </Grid>
-                  <CommandBar Background="Transparent" DefaultLabelPosition="Right" IsDynamicOverflowEnabled="True">
-                    <AppBarButton Label="启动" Tag="launch" Click="AppAction_Click" IsEnabled="{Binding CanRunSelectedAppAction}" Icon="Play" />
-                    <AppBarButton Label="强制停止" Tag="stop" Click="AppAction_Click" IsEnabled="{Binding CanRunSelectedAppAction}" Icon="Stop" />
-                    <AppBarButton Label="卸载" Tag="uninstall" Click="AppAction_Click" IsEnabled="{Binding CanRunSelectedAppAction}" Icon="Delete" />
-                  </CommandBar>
-                  <Expander Header="按包名管理（高级）" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-                    <StackPanel Padding="0,10,0,0" Spacing="8">
-                      <TextBox Text="{Binding PackageNameInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="例如 com.example.app" />
-                      <Button Content="卸载指定包名" Click="UninstallPackage_Click" HorizontalAlignment="Left" Style="{StaticResource MaterialOutlinedButtonStyle}" />
-                    </StackPanel>
-                  </Expander>
-                </StackPanel>
-              </Border>
-            </Grid>
+            <StackPanel Spacing="14" MaxWidth="1400" HorizontalAlignment="Stretch">
+              <local:AndroidQaPanel />
+              <Grid x:Name="AppsCards" Margin="0" ColumnSpacing="0" RowSpacing="14" MaxWidth="1400" HorizontalAlignment="Stretch">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition x:Name="AppsSecondaryColumn" Width="0" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition x:Name="AppsSecondaryRow" Height="Auto" />
+                </Grid.RowDefinitions>
+                <Border Grid.Row="0" Style="{StaticResource SurfaceCardStyle}" VerticalAlignment="Top">
+                  <StackPanel Spacing="12">
+                    <TextBlock Text="安装 APK" Style="{StaticResource SectionTitleStyle}" TextWrapping="Wrap" />
+                    <Grid ColumnSpacing="8">
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                      </Grid.ColumnDefinitions>
+                      <TextBox Text="{Binding ApkFilePath, Mode=TwoWay}" IsReadOnly="True" PlaceholderText="选择 .apk 文件" />
+                      <Button Grid.Column="1" Content="选择 APK" Click="ChooseApk_Click" Style="{StaticResource MaterialOutlinedButtonStyle}" />
+                    </Grid>
+                    <Button Content="安装到当前设备" Click="InstallApk_Click" Style="{StaticResource MaterialFilledButtonStyle}" IsEnabled="{Binding CanInstallApk}" HorizontalAlignment="Left" />
+                  </StackPanel>
+                </Border>
+                <Border x:Name="AppsManageCard" Grid.Row="1" Style="{StaticResource SurfaceCardStyle}" VerticalAlignment="Top">
+                  <StackPanel Spacing="12">
+                    <TextBlock Text="管理应用" Style="{StaticResource SectionTitleStyle}" TextWrapping="Wrap" />
+                    <TextBlock Text="读取用户应用后选择目标包名。卸载前会再次确认。" Style="{StaticResource MaterialBodyStyle}" TextWrapping="Wrap" />
+                    <Grid ColumnSpacing="8">
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                      </Grid.ColumnDefinitions>
+                      <ComboBox ItemsSource="{Binding InstalledApps}" DisplayMemberPath="PackageName" SelectedValuePath="PackageName" SelectedValue="{Binding SelectedAppPackage, Mode=TwoWay}" PlaceholderText="读取设备应用后选择包名" />
+                      <Button Grid.Column="1" Content="读取用户应用" Click="RefreshApps_Click" IsEnabled="{Binding CanUseSelectedDevice}" Style="{StaticResource MaterialOutlinedButtonStyle}" />
+                    </Grid>
+                    <CommandBar Background="Transparent" DefaultLabelPosition="Right" IsDynamicOverflowEnabled="True">
+                      <AppBarButton Label="启动" Tag="launch" Click="AppAction_Click" IsEnabled="{Binding CanRunSelectedAppAction}" Icon="Play" />
+                      <AppBarButton Label="强制停止" Tag="stop" Click="AppAction_Click" IsEnabled="{Binding CanRunSelectedAppAction}" Icon="Stop" />
+                      <AppBarButton Label="卸载" Tag="uninstall" Click="AppAction_Click" IsEnabled="{Binding CanRunSelectedAppAction}" Icon="Delete" />
+                    </CommandBar>
+                    <Expander Header="按包名管理（高级）" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                      <StackPanel Padding="0,10,0,0" Spacing="8">
+                        <TextBox Text="{Binding PackageNameInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="例如 com.example.app" />
+                        <Button Content="卸载指定包名" Click="UninstallPackage_Click" HorizontalAlignment="Left" Style="{StaticResource MaterialOutlinedButtonStyle}" />
+                      </StackPanel>
+                    </Expander>
+                  </StackPanel>
+                </Border>
+              </Grid>
+            </StackPanel>
           </ScrollViewer>
           <ScrollViewer Grid.Row="1" x:Name="TerminalScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch" HorizontalAlignment="Stretch" Visibility="Collapsed" Padding="0,0,0,24">
             <StackPanel x:Name="TerminalContent" Margin="0" Spacing="14" MaxWidth="1400" HorizontalAlignment="Stretch">
@@ -796,6 +799,47 @@
                           </StackPanel>
                         </Grid>
                       </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Border>
+            <Border Style="{StaticResource SurfaceCardStyle}" VerticalAlignment="Top"
+                    Visibility="{Binding HasScreenDropBatches, Converter={StaticResource BooleanVisibility}}">
+              <StackPanel Spacing="12">
+                <TextBlock Text="镜像页拖放记录" Style="{StaticResource SectionTitleStyle}" />
+                <ItemsControl ItemsSource="{Binding ScreenDropBatches}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Expander Margin="0,0,0,6" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                        <Expander.Header>
+                          <StackPanel Spacing="2">
+                            <TextBlock Text="{Binding DeviceLabel}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Foreground="{ThemeResource SkyOnSurfaceVariantBrush}" />
+                          </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Spacing="8">
+                          <ItemsControl ItemsSource="{Binding Items}">
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate>
+                                <StackPanel Margin="0,4" Spacing="2">
+                                  <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" TextWrapping="Wrap"
+                                             ToolTipService.ToolTip="{Binding Path}" />
+                                  <TextBlock TextWrapping="Wrap" Foreground="{ThemeResource SkyOnSurfaceVariantBrush}">
+                                    <Run Text="{Binding ActionLabel}" /><Run Text=" · " /><Run Text="{Binding Status}" />
+                                  </TextBlock>
+                                </StackPanel>
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                          <Button Content="在当前设备执行" Click="RunPendingScreenDrop_Click"
+                                  Style="{StaticResource MaterialOutlinedButtonStyle}"
+                                  Visibility="{Binding CanRun, Converter={StaticResource BooleanVisibility}}" />
+                          <Button Content="取消此批次" Click="CancelScreenDrop_Click"
+                                  Style="{StaticResource MaterialOutlinedButtonStyle}"
+                                  Visibility="{Binding CanCancel, Converter={StaticResource BooleanVisibility}}" />
+                        </StackPanel>
+                      </Expander>
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>

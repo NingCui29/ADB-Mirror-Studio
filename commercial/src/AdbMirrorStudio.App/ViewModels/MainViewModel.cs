@@ -18,7 +18,7 @@ using Microsoft.UI.Xaml.Media;
 
 namespace AdbMirrorStudio.App.ViewModels;
 
-public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
+public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly IAdbService _adb;
     private readonly IMirrorSessionManager _mirrorSessions;
@@ -68,6 +68,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private long _statusVersion;
     private long _statusNotificationVersion;
     private ITimer? _statusDismissTimer;
+    private InfoBarSeverity _statusSeverity = InfoBarSeverity.Informational;
     private string _statusText = "正在初始化设备服务…";
     private bool _isStatusOpen = true;
     private string _endpoint = "192.168.1.100:5555";
@@ -144,19 +145,22 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public string StatusText
     {
         get => _statusText;
-        set
+        set => SetStatus(value, GetStatusSeverity(value));
+    }
+
+    internal void SetStatus(string text, InfoBarSeverity severity)
+    {
+        if (_disposed) return;
+        var severityChanged = _statusSeverity != severity;
+        _statusSeverity = severity;
+        if (SetField(ref _statusText, text, nameof(StatusText)) || severityChanged)
         {
-            if (_disposed) return;
-            if (SetField(ref _statusText, value))
-            {
-                _statusVersion++;
-                OnPropertyChanged(nameof(StatusSeverity));
-            }
-            // Repeating an operation can produce the same text. It is still a
-            // fresh notification, but must not change refresh-response ordering.
-            IsStatusOpen = true;
-            RestartStatusDismissal();
+            _statusVersion++;
+            OnPropertyChanged(nameof(StatusSeverity));
         }
+        // An identical result reopens the notification without invalidating a pending refresh.
+        IsStatusOpen = true;
+        RestartStatusDismissal();
     }
 
     public bool IsStatusOpen
@@ -168,7 +172,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public InfoBarSeverity StatusSeverity => GetStatusSeverity(StatusText);
+    public InfoBarSeverity StatusSeverity => _statusSeverity;
 
     private void RestartStatusDismissal()
     {
@@ -339,6 +343,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             if (_applyingDeviceSnapshot) return;
             if (!SetField(ref _selectedDeviceSerial, value)) return;
+            CancelUiTest();
+            UiTestNodes = [];
             _allowAutomaticDeviceSelection = false;
             _appsRequestVersion++;
             ResetPerformance();
@@ -759,24 +765,31 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (_disposed) return;
         if (string.IsNullOrWhiteSpace(serial))
         {
-            StatusText = "请选择一台目标设备";
+            SetStatus("请选择一台目标设备", InfoBarSeverity.Warning);
             return;
         }
 
-        EnterBusy();
-        StatusText = $"正在向 {serial} 安装 APK…";
+        if (!_fileOperationGate.Wait(0))
+        {
+            SetStatus("已有文件任务正在运行，请稍后安装 APK", InfoBarSeverity.Warning);
+            return;
+        }
+
+        EnterFileBusy();
+        SetStatus($"正在向 {serial} 安装 APK…", InfoBarSeverity.Informational);
         try
         {
             var result = await _adb.InstallApkAsync(serial, ApkFilePath, _lifetimeToken);
-            StatusText = string.IsNullOrWhiteSpace(result) ? "APK 安装完成" : $"APK 安装完成：{result}";
+            SetStatus(string.IsNullOrWhiteSpace(result) ? "APK 安装完成" : $"APK 安装完成：{result}", InfoBarSeverity.Success);
         }
         catch (Exception exception)
         {
-            StatusText = $"APK 安装失败：{exception.Message}";
+            SetStatus($"APK 安装失败：{exception.Message}", InfoBarSeverity.Error);
         }
         finally
         {
-            ExitBusy();
+            ExitFileBusy();
+            _fileOperationGate.Release();
         }
     }
 
@@ -788,7 +801,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (_disposed) return;
         if (IsTransferRunning)
         {
-            StatusText = "文件传输进行中，完成或取消后才能更改队列";
+            SetStatus("文件传输进行中，完成或取消后才能更改队列", InfoBarSeverity.Warning);
             return;
         }
         var files = paths.Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
@@ -799,7 +812,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         finally { _settingTransferFiles = false; }
         OnPropertyChanged(nameof(CanPushFiles));
         OnPropertyChanged(nameof(HasNoTransferTasks));
-        StatusText = files.Length == 0 ? "未选择有效文件" : $"已加入 {files.Length} 个文件";
+        if (files.Length == 0) SetStatus("未选择有效文件", InfoBarSeverity.Warning);
+        else SetStatus($"已加入 {files.Length} 个文件", InfoBarSeverity.Success);
     }
 
     public async Task PushFilesAsync(string? serial)
@@ -807,7 +821,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (_disposed) return;
         if (string.IsNullOrWhiteSpace(serial))
         {
-            StatusText = "请选择一台目标设备";
+            SetStatus("请选择一台目标设备", InfoBarSeverity.Warning);
             return;
         }
 
@@ -817,22 +831,23 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
         if (TransferQueue.Count == 0)
         {
-            StatusText = "请选择或拖入至少一个文件";
+            SetStatus("请选择或拖入至少一个文件", InfoBarSeverity.Warning);
             return;
         }
 
-        if (Interlocked.CompareExchange(ref _transferRunning, 1, 0) != 0)
+        if (!_fileOperationGate.Wait(0))
         {
-            StatusText = "已有文件传输任务正在运行";
+            SetStatus("已有文件传输任务正在运行", InfoBarSeverity.Warning);
             return;
         }
+        Interlocked.Exchange(ref _transferRunning, 1);
         OnPropertyChanged(nameof(IsTransferRunning));
         NotifyTasksState();
 
         var transferCancellation = CancellationTokenSource.CreateLinkedTokenSource(_lifetimeToken);
         _transferCancellation = transferCancellation;
-        EnterBusy();
-        StatusText = $"正在向 {serial} 推送 {TransferQueue.Count} 个文件…";
+        EnterFileBusy();
+        SetStatus($"正在向 {serial} 推送 {TransferQueue.Count} 个文件…", InfoBarSeverity.Informational);
         var completed = 0;
         var failed = 0;
         foreach (var item in TransferQueue)
@@ -865,9 +880,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                     failed++;
                 }
             }
-            StatusText = failed == 0
-                ? $"文件任务完成：{completed} 个成功"
-                : $"文件任务完成：{completed} 个成功，{failed} 个失败";
+            if (failed == 0) SetStatus($"文件任务完成：{completed} 个成功", InfoBarSeverity.Success);
+            else SetStatus($"文件任务完成：{completed} 个成功，{failed} 个失败", InfoBarSeverity.Error);
         }
         catch (OperationCanceledException)
         {
@@ -875,11 +889,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             {
                 item.Status = "已取消";
             }
-            StatusText = $"传输已取消，已完成 {completed} 个文件";
+            SetStatus($"传输已取消，已完成 {completed} 个文件", InfoBarSeverity.Warning);
         }
         catch (Exception exception)
         {
-            StatusText = $"文件推送失败：{exception.Message}";
+            SetStatus($"文件推送失败：{exception.Message}", InfoBarSeverity.Error);
         }
         finally
         {
@@ -888,7 +902,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             Interlocked.Exchange(ref _transferRunning, 0);
             OnPropertyChanged(nameof(IsTransferRunning));
             NotifyTasksState();
-            ExitBusy();
+            ExitFileBusy();
+            _fileOperationGate.Release();
         }
     }
 
@@ -896,11 +911,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         if (_transferCancellation is null)
         {
-            StatusText = "当前没有文件传输任务";
+            SetStatus("当前没有文件传输任务", InfoBarSeverity.Informational);
             return;
         }
         _transferCancellation.Cancel();
-        StatusText = "正在取消文件传输…";
+        SetStatus("正在取消文件传输…", InfoBarSeverity.Informational);
     }
 
     public async Task DiscoverAsync()
@@ -1456,19 +1471,19 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (_disposed) return;
         if (string.IsNullOrWhiteSpace(serial))
         {
-            StatusText = "请选择一台目标设备";
+            SetStatus("请选择一台目标设备", InfoBarSeverity.Warning);
             return;
         }
         EnterBusy();
-        StatusText = $"正在截取 {serial} 的屏幕…";
+        SetStatus($"正在截取 {serial} 的屏幕…", InfoBarSeverity.Informational);
         try
         {
             var result = await _adb.CaptureScreenshotAsync(serial, localPath, _lifetimeToken);
-            StatusText = $"截图已保存到 {result}";
+            SetStatus($"截图已保存到 {result}", InfoBarSeverity.Success);
         }
         catch (Exception exception)
         {
-            StatusText = $"截图失败：{exception.Message}";
+            SetStatus($"截图失败：{exception.Message}", InfoBarSeverity.Error);
         }
         finally
         {
@@ -1507,19 +1522,19 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (_disposed) return;
         if (string.IsNullOrWhiteSpace(serial))
         {
-            StatusText = "请选择一台目标设备";
+            SetStatus("请选择一台目标设备", InfoBarSeverity.Warning);
             return;
         }
         EnterBusy();
-        StatusText = $"正在从 {serial} 下载 {RemoteFilePath}…";
+        SetStatus($"正在从 {serial} 下载 {RemoteFilePath}…", InfoBarSeverity.Informational);
         try
         {
             var result = await _adb.PullFileAsync(serial, RemoteFilePath, LocalDownloadDirectory, _lifetimeToken);
-            StatusText = string.IsNullOrWhiteSpace(result) ? "设备文件下载完成" : $"下载完成：{result}";
+            SetStatus(string.IsNullOrWhiteSpace(result) ? "设备文件下载完成" : $"下载完成：{result}", InfoBarSeverity.Success);
         }
         catch (Exception exception)
         {
-            StatusText = $"设备文件下载失败：{exception.Message}";
+            SetStatus($"设备文件下载失败：{exception.Message}", InfoBarSeverity.Error);
         }
         finally
         {

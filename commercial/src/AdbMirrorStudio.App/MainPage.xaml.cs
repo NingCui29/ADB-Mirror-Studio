@@ -594,49 +594,41 @@ public sealed partial class MainPage : Page
 
     private async void ScreenDrop_Drop(object sender, DragEventArgs e)
     {
-        if (ViewModel is null || !e.DataView.Contains(StandardDataFormats.StorageItems)) return;
-        var items = await e.DataView.GetStorageItemsAsync();
-        var files = items.OfType<StorageFile>().Select(file => file.Path).ToList();
-        if (files.Count == 0) return;
-
-        var apks = files.Where(file => file.EndsWith(".apk", StringComparison.OrdinalIgnoreCase)).ToList();
-        var otherFiles = files.Where(file => !file.EndsWith(".apk", StringComparison.OrdinalIgnoreCase)).ToList();
-
-        if (otherFiles.Count > 0)
+        var model = ViewModel;
+        if (_shutdown || model is null || !e.DataView.Contains(StandardDataFormats.StorageItems)) return;
+        // Resolving a drop can yield while the user selects another device.
+        var targetSerial = model.SelectedDeviceSerial;
+        string[] paths;
+        try
         {
-            ViewModel.SetTransferFiles(otherFiles);
+            var items = await e.DataView.GetStorageItemsAsync();
+            paths = items.OfType<StorageFile>().Select(file => file.Path).ToArray();
+        }
+        catch (Exception exception)
+        {
+            if (!_shutdown) model.SetStatus($"读取拖入文件失败：{exception.Message}", InfoBarSeverity.Error);
+            return;
+        }
+        if (_shutdown) return;
+        if (paths.Length == 0)
+        {
+            model.SetStatus("请拖入 APK 或普通文件。", InfoBarSeverity.Warning);
+            return;
         }
 
-        if (apks.Count > 0)
-        {
-            ViewModel.ApkFilePath = apks[0];
-            if (ViewModel.CanUseSelectedDevice)
-            {
-                await ViewModel.InstallApkAsync(ViewModel.SelectedDeviceSerial);
-                if (otherFiles.Count > 0)
-                {
-                    await ViewModel.PushFileAsync(ViewModel.SelectedDeviceSerial);
-                }
-            }
-            else
-            {
-                ViewModel.StatusText = otherFiles.Count > 0
-                    ? $"已就绪 APK 与 {otherFiles.Count} 个传输文件，请先选择目标设备"
-                    : "已就绪 APK，请先选择目标设备";
-            }
-        }
-        else
-        {
-            ViewModel.SetTransferFiles(otherFiles);
-            if (ViewModel.CanUseSelectedDevice)
-            {
-                await ViewModel.PushFileAsync(ViewModel.SelectedDeviceSerial);
-            }
-            else
-            {
-                ViewModel.StatusText = $"已添加 {otherFiles.Count} 个文件到传输队列，请选择目标设备";
-            }
-        }
+        await model.RunScreenDropAsync(targetSerial, paths);
+    }
+
+    private async void RunPendingScreenDrop_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel is { } model && sender is Button { DataContext: ScreenDropBatchViewModel batch })
+            await model.RunPendingScreenDropAsync(batch, model.SelectedDeviceSerial);
+    }
+
+    private void CancelScreenDrop_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: ScreenDropBatchViewModel batch })
+            ViewModel?.CancelScreenDrop(batch);
     }
 
     private async void MirrorProfileSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)

@@ -510,6 +510,12 @@ public sealed class MainPageMarkupTests
         Assert.Equal("True", (string?)mirrorCard.Attribute("AllowDrop"));
         Assert.Equal("ScreenDrop_DragOver", (string?)mirrorCard.Attribute("DragOver"));
         Assert.Equal("ScreenDrop_Drop", (string?)mirrorCard.Attribute("Drop"));
+        var handler = MethodCode("ScreenDrop_Drop");
+        var firstAwait = handler.IndexOf("await ", StringComparison.Ordinal);
+        Assert.True(firstAwait > 0);
+        Assert.Contains("targetSerial = model.SelectedDeviceSerial", handler[..firstAwait]);
+        Assert.DoesNotContain("SelectedDeviceSerial", handler[firstAwait..]);
+        Assert.Contains("RunScreenDropAsync(targetSerial,", handler[firstAwait..]);
     }
 
     [Fact]

@@ -25,6 +25,8 @@ public interface IAdbService
     Task ForceStopAppAsync(string serial, string packageName, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     Task UninstallAppAsync(string serial, string packageName, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     Task<string> RunShellCommandAsync(string serial, string command, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<IReadOnlyList<UiTestNode>> InspectUiAsync(string serial, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task ExecuteUiStepAsync(string serial, UiTestStep step, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 }
 
 public sealed class AdbCommandException(string message, int? exitCode = null) : Exception(message)

@@ -16,8 +16,13 @@ public sealed record CommandResult(
     bool TimedOut,
     bool Cancelled)
 {
+    public const int CaptureCharacterLimit = 1_000_000;
+    public OutputTruncation StandardOutputTruncation { get; init; }
+    public OutputTruncation StandardErrorTruncation { get; init; }
     public bool IsSuccess => ExitCode == 0 && !TimedOut && !Cancelled;
 }
+
+public enum OutputTruncation { None, CharacterLimit, Interrupted }
 
 public interface ICommandRunner
 {

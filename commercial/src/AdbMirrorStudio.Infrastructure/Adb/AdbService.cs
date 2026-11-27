@@ -4,7 +4,7 @@ using AdbMirrorStudio.Domain.Devices;
 
 namespace AdbMirrorStudio.Infrastructure.Adb;
 
-public sealed class AdbService(ICommandRunner commandRunner, string adbPath) : IAdbService
+public sealed partial class AdbService(ICommandRunner commandRunner, string adbPath) : IAdbService
 {
     public async Task<IReadOnlyList<DeviceInfo>> GetDevicesAsync(CancellationToken cancellationToken = default)
     {
@@ -482,12 +482,13 @@ public sealed class AdbService(ICommandRunner commandRunner, string adbPath) : I
     private async Task<CommandResult> ExecuteAsync(
         IReadOnlyList<string> arguments,
         TimeSpan timeout,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool sensitiveArguments = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (!File.Exists(adbPath)) throw new FileNotFoundException("未找到 adb.exe。", adbPath);
         var result = await commandRunner.RunAsync(
-            new CommandRequest(adbPath, arguments, Path.GetDirectoryName(adbPath), Timeout: timeout),
+            new CommandRequest(adbPath, arguments, Path.GetDirectoryName(adbPath), Timeout: timeout, SensitiveArguments: sensitiveArguments),
             cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
         EnsureSuccess(result);

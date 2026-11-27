@@ -136,6 +136,75 @@ public sealed partial class MainViewModelBehaviorTests
         Assert.True(model.IsStatusOpen);
     }
 
+    [Fact]
+    public async Task Screenshot_UsesOperationOutcomeForProgressAndCompletionWithErrorWordsInPathAndSerial()
+    {
+        var clock = new StatusTestClock();
+        var ui = new QueuedStatusContext();
+        var pending = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var model = Create(new FakeAdb { Screenshot = _ => pending.Task }, timeProvider: clock, uiContext: ui);
+        const string path = @"D:\QA\失败复现.png";
+
+        var operation = model.CaptureScreenshotAsync("错误示例设备", path);
+        Assert.Equal(InfoBarSeverity.Informational, model.StatusSeverity);
+        pending.SetResult(path);
+        await operation;
+
+        Assert.Equal($"截图已保存到 {path}", model.StatusText);
+        Assert.Equal(InfoBarSeverity.Success, model.StatusSeverity);
+        clock.Advance(TimeSpan.FromSeconds(5));
+        ui.Drain();
+        Assert.False(model.IsStatusOpen);
+    }
+
+    [Fact]
+    public async Task Screenshot_FailureCannotBeClassifiedAsSuccessByDiagnosticText()
+    {
+        var adb = new FakeAdb { Screenshot = _ => throw new IOException("日志中没有错误详情") };
+        using var model = Create(adb);
+        await model.CaptureScreenshotAsync("device", "test.png");
+        Assert.Contains("日志中没有错误详情", model.StatusText);
+        Assert.Equal(InfoBarSeverity.Error, model.StatusSeverity);
+    }
+
+    [Theory]
+    [InlineData(true, InfoBarSeverity.Success)]
+    [InlineData(false, InfoBarSeverity.Error)]
+    public async Task ManualApk_UsesInstallOutcomeIndependentlyOfAdbOutput(bool succeeds, InfoBarSeverity expected)
+    {
+        var adb = new FakeAdb
+        {
+            Install = (_, _) => succeeds
+                ? Task.FromResult("测试失败场景.apk: Success")
+                : Task.FromException<string>(new IOException("没有错误详情"))
+        };
+        using var model = Create(adb);
+        model.ApkFilePath = "sample.apk";
+        await model.InstallApkAsync("device");
+        Assert.Equal(expected, model.StatusSeverity);
+        Assert.Contains(succeeds ? "测试失败场景" : "没有错误详情", model.StatusText);
+    }
+
+    [Fact]
+    public async Task Status_SameTextWithNewSeverityNotifiesAndInvalidatesQueuedDismissal()
+    {
+        var clock = new StatusTestClock();
+        var ui = new QueuedStatusContext();
+        using var model = Create(new FakeAdb(), timeProvider: clock, uiContext: ui);
+        await model.CaptureScreenshotAsync("device", "失败.png");
+        clock.Advance(TimeSpan.FromSeconds(5));
+        var changed = new List<string?>();
+        model.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
+
+        // A legacy text-only caller posts exactly the same message with inferred severity.
+        model.StatusText = model.StatusText;
+        Assert.Equal(InfoBarSeverity.Error, model.StatusSeverity);
+        Assert.Equal([nameof(model.StatusSeverity)], changed);
+        ui.Drain();
+        Assert.True(model.IsStatusOpen);
+        Assert.Equal(0, clock.ActiveTimerCount);
+    }
+
     private sealed class QueuedStatusContext : SynchronizationContext
     {
         private readonly Queue<(SendOrPostCallback Callback, object? State)> _callbacks = new();

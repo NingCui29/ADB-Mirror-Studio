@@ -16,6 +16,8 @@
   <ItemGroup>
     <Using Include="Xunit" />
     <Compile Include="../../src/AdbMirrorStudio.App/ViewModels/MainViewModel.cs" Link="App/MainViewModel.cs" />
+    <Compile Include="../../src/AdbMirrorStudio.App/ViewModels/MainViewModel.UiTest.cs" Link="App/MainViewModel.UiTest.cs" />
+    <Compile Include="../../src/AdbMirrorStudio.App/ViewModels/MainViewModel.ScreenDrop.cs" Link="App/MainViewModel.ScreenDrop.cs" />
     <Compile Include="../../src/AdbMirrorStudio.App/Mirroring/MirrorToolbarPlacement.cs" Link="App/MirrorToolbarPlacement.cs" />
   </ItemGroup>
 
